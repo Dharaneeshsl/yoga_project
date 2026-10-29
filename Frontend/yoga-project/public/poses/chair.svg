@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 400" width="100%" height="100%">
+  <defs>
+    <linearGradient id="chairGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f59e0b" />
+      <stop offset="100%" stop-color="#d97706" />
+    </linearGradient>
+  </defs>
+
+  <!-- Zen Circle -->
+  <circle cx="150" cy="200" r="130" fill="#fffbeb" opacity="0.8" />
+  <circle cx="150" cy="200" r="100" fill="none" stroke="#fde68a" stroke-width="2" stroke-dasharray="6,6" />
+
+  <!-- Ground -->
+  <line x1="50" y1="365" x2="250" y2="365" stroke="#d97706" stroke-width="3" stroke-linecap="round" />
+
+  <!-- Chair Pose (Utkatasana) Side Angle View:
+       Feet at (130, 365)
+       Shins angle slightly forward to Knees at (165, 305)
+       Thighs slope down/back to Hips at (115, 260)
+       Torso leans forward at 45 deg from Hips (115, 260) to Shoulders (165, 175)
+       Head at (180, 150)
+       Arms continue torso angle up/forward to Hands at (225, 80)
+  -->
+
+  <!-- Head -->
+  <circle cx="178" cy="148" r="16" fill="url(#chairGrad)" />
+
+  <!-- Feet -->
+  <path d="M120 365 L150 365" stroke="#b45309" stroke-width="8" stroke-linecap="round" />
+
+  <!-- Shins (Ankles to Knees) -->
+  <line x1="130" y1="365" x2="165" y2="305" stroke="#d97706" stroke-width="8" stroke-linecap="round" />
+
+  <!-- Thighs (Knees to Hips, sinking into imaginary chair) -->
+  <line x1="165" y1="305" x2="115" y2="260" stroke="#d97706" stroke-width="8" stroke-linecap="round" />
+
+  <!-- Torso / Spine (Hips to Shoulders, elongated flat back) -->
+  <line x1="115" y1="260" x2="165" y2="175" stroke="#b45309" stroke-width="8" stroke-linecap="round" />
+
+  <!-- Arms Overhead inline with ears / spine -->
+  <line x1="165" y1="175" x2="198" y2="120" stroke="#f59e0b" stroke-width="7" stroke-linecap="round" />
+  <line x1="198" y1="120" x2="230" y2="70" stroke="#f59e0b" stroke-width="6" stroke-linecap="round" />
+  <circle cx="235" cy="65" r="5" fill="#b45309" />
+
+  <!-- Key Joint Points -->
+  <circle cx="165" cy="305" r="6" fill="#fbbf24" />
+  <circle cx="115" cy="260" r="6" fill="#fbbf24" />
+  <circle cx="165" cy="175" r="6" fill="#fbbf24" />
+</svg>

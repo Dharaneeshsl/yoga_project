@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 400" width="100%" height="100%">
+  <defs>
+    <linearGradient id="treeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#34d399" />
+      <stop offset="100%" stop-color="#059669" />
+    </linearGradient>
+    <filter id="softGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="8" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+
+  <!-- Background Zen Circle -->
+  <circle cx="150" cy="200" r="130" fill="#ecfdf5" opacity="0.8" />
+  <circle cx="150" cy="200" r="100" fill="none" stroke="#a7f3d0" stroke-width="2" stroke-dasharray="6,6" />
+
+  <!-- Ground Line -->
+  <line x1="60" y1="365" x2="240" y2="365" stroke="#10b981" stroke-width="3" stroke-linecap="round" />
+
+  <!-- Head -->
+  <circle cx="150" cy="75" r="18" fill="url(#treeGrad)" />
+
+  <!-- Torso & Spine -->
+  <line x1="150" y1="95" x2="150" y2="200" stroke="#059669" stroke-width="8" stroke-linecap="round" />
+
+  <!-- Standing Leg (Left) -->
+  <line x1="150" y1="200" x2="150" y2="280" stroke="#059669" stroke-width="8" stroke-linecap="round" />
+  <line x1="150" y1="280" x2="150" y2="365" stroke="#059669" stroke-width="8" stroke-linecap="round" />
+  <!-- Standing Foot -->
+  <path d="M140 365 L160 365" stroke="#047857" stroke-width="8" stroke-linecap="round" />
+
+  <!-- Bent Leg (Right Tree Leg) -->
+  <!-- Hip to Knee (bent out to side) -->
+  <line x1="150" y1="200" x2="200" y2="250" stroke="#10b981" stroke-width="8" stroke-linecap="round" />
+  <!-- Knee to Foot (resting on inner thigh/knee) -->
+  <line x1="200" y1="250" x2="152" y2="275" stroke="#10b981" stroke-width="7" stroke-linecap="round" />
+  <circle cx="200" cy="250" r="5" fill="#047857" />
+
+  <!-- Arms (Raised Overhead in Anjali Mudra / Prayer) -->
+  <!-- Left Arm -->
+  <line x1="150" y1="120" x2="130" y2="70" stroke="#10b981" stroke-width="7" stroke-linecap="round" />
+  <line x1="130" y1="70" x2="147" y2="30" stroke="#10b981" stroke-width="6" stroke-linecap="round" />
+  <!-- Right Arm -->
+  <line x1="150" y1="120" x2="170" y2="70" stroke="#10b981" stroke-width="7" stroke-linecap="round" />
+  <line x1="170" y1="70" x2="153" y2="30" stroke="#10b981" stroke-width="6" stroke-linecap="round" />
+
+  <!-- Hands together at top -->
+  <circle cx="150" cy="28" r="6" fill="#047857" />
+
+  <!-- Key Joint Alignment Rings -->
+  <circle cx="150" cy="120" r="5" fill="#34d399" />
+  <circle cx="150" cy="200" r="5" fill="#34d399" />
+  <circle cx="150" cy="280" r="5" fill="#34d399" />
+</svg>

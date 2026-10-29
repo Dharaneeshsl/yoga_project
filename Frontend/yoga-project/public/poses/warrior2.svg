@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" width="100%" height="100%">
+  <defs>
+    <linearGradient id="warriorGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="100%" stop-color="#0284c7" />
+    </linearGradient>
+  </defs>
+
+  <!-- Zen Circle -->
+  <circle cx="200" cy="150" r="120" fill="#f0f9ff" opacity="0.8" />
+  <circle cx="200" cy="150" r="95" fill="none" stroke="#bae6fd" stroke-width="2" stroke-dasharray="6,6" />
+
+  <!-- Ground -->
+  <line x1="40" y1="270" x2="360" y2="270" stroke="#0284c7" stroke-width="3" stroke-linecap="round" />
+
+  <!-- Head gazing over front hand -->
+  <circle cx="205" cy="70" r="16" fill="url(#warriorGrad)" />
+
+  <!-- Torso (Upright, centered above pelvis) -->
+  <line x1="200" y1="88" x2="200" y2="175" stroke="#0369a1" stroke-width="8" stroke-linecap="round" />
+
+  <!-- Horizontal Arms (Left arm backward, Right arm forward) -->
+  <!-- Back Arm (Left) -->
+  <line x1="200" y1="110" x2="110" y2="112" stroke="#0ea5e9" stroke-width="7" stroke-linecap="round" />
+  <line x1="110" y1="112" x2="55" y2="114" stroke="#0ea5e9" stroke-width="6" stroke-linecap="round" />
+  <circle cx="50" cy="114" r="5" fill="#0369a1" />
+
+  <!-- Front Arm (Right) -->
+  <line x1="200" y1="110" x2="285" y2="112" stroke="#0ea5e9" stroke-width="7" stroke-linecap="round" />
+  <line x1="285" y1="112" x2="340" y2="114" stroke="#0ea5e9" stroke-width="6" stroke-linecap="round" />
+  <circle cx="345" cy="114" r="5" fill="#0369a1" />
+
+  <!-- Legs -->
+  <!-- Back Leg (Straight, angled back) -->
+  <line x1="200" y1="175" x2="140" y2="220" stroke="#0284c7" stroke-width="8" stroke-linecap="round" />
+  <line x1="140" y1="220" x2="90" y2="270" stroke="#0284c7" stroke-width="8" stroke-linecap="round" />
+  <path d="M75 270 L100 270" stroke="#0369a1" stroke-width="8" stroke-linecap="round" />
+
+  <!-- Front Leg (Deep lunge, 90 degree knee over ankle) -->
+  <!-- Hip to Knee (Horizontal) -->
+  <line x1="200" y1="175" x2="280" y2="195" stroke="#0284c7" stroke-width="8" stroke-linecap="round" />
+  <!-- Knee to Ankle (Vertical down to ground) -->
+  <line x1="280" y1="195" x2="280" y2="270" stroke="#0284c7" stroke-width="8" stroke-linecap="round" />
+  <path d="M270 270 L305 270" stroke="#0369a1" stroke-width="8" stroke-linecap="round" />
+
+  <!-- Joints Highlight -->
+  <circle cx="200" cy="110" r="5" fill="#38bdf8" />
+  <circle cx="200" cy="175" r="5" fill="#38bdf8" />
+  <circle cx="280" cy="195" r="5" fill="#38bdf8" />
+</svg>

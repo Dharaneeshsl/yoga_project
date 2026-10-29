@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" width="100%" height="100%">
+  <defs>
+    <linearGradient id="dogGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#a855f7" />
+      <stop offset="100%" stop-color="#7e22ce" />
+    </linearGradient>
+  </defs>
+
+  <!-- Zen Circle -->
+  <circle cx="200" cy="150" r="120" fill="#faf5ff" opacity="0.8" />
+  <circle cx="200" cy="150" r="95" fill="none" stroke="#e9d5ff" stroke-width="2" stroke-dasharray="6,6" />
+
+  <!-- Ground -->
+  <line x1="40" y1="270" x2="360" y2="270" stroke="#7e22ce" stroke-width="3" stroke-linecap="round" />
+
+  <!-- Inverted V Shape: Hands at 90,270 | Hips at 200,85 | Feet at 310,270 -->
+
+  <!-- Head between arms -->
+  <circle cx="125" cy="185" r="16" fill="url(#dogGrad)" />
+
+  <!-- Arms / Upper Torso (Straight line from hands through shoulders to hips) -->
+  <!-- Hands -->
+  <path d="M80 270 L105 270" stroke="#6b21a8" stroke-width="7" stroke-linecap="round" />
+  <!-- Wrist to Elbow -->
+  <line x1="95" y1="270" x2="125" y2="200" stroke="#9333ea" stroke-width="7" stroke-linecap="round" />
+  <!-- Elbow to Shoulder -->
+  <line x1="125" y1="200" x2="155" y2="135" stroke="#9333ea" stroke-width="7" stroke-linecap="round" />
+  <!-- Shoulder to Hip / Spine (Long straight spine) -->
+  <line x1="155" y1="135" x2="205" y2="85" stroke="#7e22ce" stroke-width="8" stroke-linecap="round" />
+
+  <!-- Hips Peak Apex -->
+  <circle cx="205" cy="85" r="6" fill="#a855f7" />
+
+  <!-- Legs (Straight from hips to ankles) -->
+  <!-- Hip to Knee -->
+  <line x1="205" y1="85" x2="255" y2="175" stroke="#7e22ce" stroke-width="8" stroke-linecap="round" />
+  <!-- Knee to Ankle -->
+  <line x1="255" y1="175" x2="305" y2="265" stroke="#7e22ce" stroke-width="8" stroke-linecap="round" />
+  <!-- Feet / Heels grounding down -->
+  <path d="M295 268 L320 268" stroke="#6b21a8" stroke-width="7" stroke-linecap="round" />
+
+  <!-- Joint Keypoints -->
+  <circle cx="155" cy="135" r="5" fill="#c084fc" />
+  <circle cx="255" cy="175" r="5" fill="#c084fc" />
+</svg>
