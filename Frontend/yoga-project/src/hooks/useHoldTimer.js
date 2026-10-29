@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { computeHoldScore } from '../utils/storageUtils';
 
 export function useHoldTimer({
   targetHoldSeconds = 30,
@@ -16,6 +17,8 @@ export function useHoldTimer({
   const phaseRef = useRef('idle');
   const lastTimestampRef = useRef(null);
   const countdownIntervalRef = useRef(null);
+  const holdTickerRef = useRef(null);
+
   const onCompleteRef = useRef(onComplete);
   onCompleteRef.current = onComplete;
 
@@ -29,12 +32,18 @@ export function useHoldTimer({
   passScoreThresholdRef.current = passScoreThreshold;
 
   const holdElapsedRef = useRef(0);
+  const isCurrentlyInPoseRef = useRef(false);
+  const isTabPausedRef = useRef(false);
+  const completedOnceRef = useRef(false);
 
   // Statistics accumulators over the entire hold duration
+  // Samples every frame during the holding phase so scores reflect true performance
   const similaritySamplesRef = useRef([]);
   const jointDiffAccRef = useRef({});
   const jointCountAccRef = useRef({});
   const completedPayloadRef = useRef(null);
+  const lastSimMapRef = useRef({});
+  const lastIsMirroredRef = useRef(false);
 
   // Sync ref with phase state
   useEffect(() => {
@@ -47,19 +56,109 @@ export function useHoldTimer({
       clearInterval(countdownIntervalRef.current);
       countdownIntervalRef.current = null;
     }
+    if (holdTickerRef.current) {
+      clearInterval(holdTickerRef.current);
+      holdTickerRef.current = null;
+    }
     phaseRef.current = 'idle';
     setPhase('idle');
     setCountdownRemaining(countdownSeconds);
     setHoldElapsed(0);
     setIsCurrentlyInPose(false);
     setIsTabPaused(false);
+    isCurrentlyInPoseRef.current = false;
+    isTabPausedRef.current = false;
+    completedOnceRef.current = false;
     holdElapsedRef.current = 0;
     lastTimestampRef.current = null;
     similaritySamplesRef.current = [];
     jointDiffAccRef.current = {};
     jointCountAccRef.current = {};
     completedPayloadRef.current = null;
+    lastSimMapRef.current = {};
   }, [countdownSeconds]);
+
+  // Complete level run and notify caller
+  const finishRun = useCallback(() => {
+    if (completedOnceRef.current) return;
+    completedOnceRef.current = true;
+
+    if (holdTickerRef.current) {
+      clearInterval(holdTickerRef.current);
+      holdTickerRef.current = null;
+    }
+
+    phaseRef.current = 'completed';
+    setPhase('completed');
+
+    // Calculate score using every frame sampled during the hold attempt
+    const samples = similaritySamplesRef.current;
+    const { score, isPassed } = computeHoldScore(samples, passScoreThresholdRef.current);
+
+    // Build accumulated per-joint error breakdown
+    const accumulatedSimMap = {};
+    const baseMap = lastSimMapRef.current || {};
+    for (const key of Object.keys(baseMap)) {
+      const totalDiff = jointDiffAccRef.current[key] || 0;
+      const count = jointCountAccRef.current[key] || 1;
+      const avgDiff = totalDiff / count;
+      const template = baseMap[key] || {};
+      const tol = template.tol || 30;
+      const jointScore = Math.exp(-0.5 * Math.pow(avgDiff / tol, 2));
+
+      accumulatedSimMap[key] = {
+        ...template,
+        diff: avgDiff,
+        score: jointScore,
+        isGood: avgDiff <= tol,
+        hasValue: count > 0
+      };
+    }
+
+    const summary = {
+      score,
+      holdElapsed: targetDurationRef.current,
+      simMap: accumulatedSimMap,
+      isMirrored: lastIsMirroredRef.current,
+      isPassed
+    };
+
+    completedPayloadRef.current = summary;
+    if (onCompleteRef.current) {
+      onCompleteRef.current(summary);
+    }
+  }, []);
+
+  // Internal high-frequency hold timer loop (50ms interval, driven by performance.now())
+  const startHoldLoop = useCallback(() => {
+    if (holdTickerRef.current) {
+      clearInterval(holdTickerRef.current);
+    }
+    lastTimestampRef.current = performance.now();
+
+    holdTickerRef.current = setInterval(() => {
+      if (phaseRef.current !== 'holding') return;
+      if (isTabPausedRef.current) {
+        lastTimestampRef.current = performance.now();
+        return;
+      }
+
+      const now = performance.now();
+      const deltaSeconds = (now - (lastTimestampRef.current || now)) / 1000;
+      lastTimestampRef.current = now;
+
+      // Advance hold elapsed time when user is actively in pose
+      if (isCurrentlyInPoseRef.current && deltaSeconds > 0 && deltaSeconds < 1.0) {
+        holdElapsedRef.current += deltaSeconds;
+        const currentElapsed = Math.min(targetDurationRef.current, holdElapsedRef.current);
+        setHoldElapsed(currentElapsed);
+
+        if (currentElapsed >= targetDurationRef.current) {
+          finishRun();
+        }
+      }
+    }, 50);
+  }, [finishRun]);
 
   // Start the 3-second countdown followed by continuous hold session
   const startRun = useCallback(() => {
@@ -81,85 +180,30 @@ export function useHoldTimer({
         // Transition to holding phase
         setPhase('holding');
         phaseRef.current = 'holding';
-        lastTimestampRef.current = performance.now();
+        startHoldLoop();
       }
     }, 1000);
-  }, [countdownSeconds, reset]);
+  }, [countdownSeconds, reset, startHoldLoop]);
 
-  // Update status and accumulate metrics
+  // Update status and accumulate metrics across every frame
   const updatePoseStatus = useCallback((similarity, isBodyReady, simMap = {}, isMirrored = false) => {
     if (phaseRef.current !== 'holding') return;
 
-    const meetsPose = isBodyReady && similarity >= similarityThresholdRef.current;
+    const meetsPose = Boolean(isBodyReady && similarity >= similarityThresholdRef.current);
+    isCurrentlyInPoseRef.current = meetsPose;
     setIsCurrentlyInPose(meetsPose);
 
-    const now = performance.now();
-    if (lastTimestampRef.current == null) {
-      lastTimestampRef.current = now;
-      return;
-    }
+    lastSimMapRef.current = simMap;
+    lastIsMirroredRef.current = isMirrored;
 
-    const deltaSeconds = (now - lastTimestampRef.current) / 1000;
-    lastTimestampRef.current = now;
+    // Sample every frame during the active hold phase (both in-pose and out-of-pose)
+    // so the final score accurately reflects the user's consistency and quality!
+    similaritySamplesRef.current.push(similarity);
 
-    // Only accumulate hold time and quality samples if actively in pose!
-    if (meetsPose && deltaSeconds > 0 && deltaSeconds < 0.5) {
-      holdElapsedRef.current += deltaSeconds;
-      const currentElapsed = Math.min(targetDurationRef.current, holdElapsedRef.current);
-      setHoldElapsed(currentElapsed);
-
-      // Accumulate similarity and per-joint error during the hold
-      similaritySamplesRef.current.push(similarity);
-      for (const [jointKey, jointData] of Object.entries(simMap)) {
-        if (jointData && jointData.hasValue) {
-          jointDiffAccRef.current[jointKey] = (jointDiffAccRef.current[jointKey] || 0) + jointData.diff;
-          jointCountAccRef.current[jointKey] = (jointCountAccRef.current[jointKey] || 0) + 1;
-        }
-      }
-
-      if (currentElapsed >= targetDurationRef.current) {
-        phaseRef.current = 'completed';
-        setPhase('completed');
-
-        // Calculate average similarity across all in-hold frames
-        const samples = similaritySamplesRef.current;
-        const avgSimilarity = samples.length > 0
-          ? Math.round((samples.reduce((a, b) => a + b, 0) / samples.length) * 100)
-          : Math.round(similarity * 100);
-
-        // Build accumulated per-joint error breakdown
-        const accumulatedSimMap = {};
-        for (const key of Object.keys(simMap)) {
-          const totalDiff = jointDiffAccRef.current[key] || 0;
-          const count = jointCountAccRef.current[key] || 1;
-          const avgDiff = totalDiff / count;
-          const template = simMap[key] || {};
-          const tol = template.tol || 30;
-          const score = Math.exp(-0.5 * Math.pow(avgDiff / tol, 2));
-
-          accumulatedSimMap[key] = {
-            ...template,
-            diff: avgDiff,
-            score,
-            isGood: avgDiff <= tol,
-            hasValue: count > 0
-          };
-        }
-
-        const isPassed = avgSimilarity >= passScoreThresholdRef.current;
-
-        const summary = {
-          score: avgSimilarity,
-          holdElapsed: currentElapsed,
-          simMap: accumulatedSimMap,
-          isMirrored,
-          isPassed
-        };
-
-        completedPayloadRef.current = summary;
-        if (onCompleteRef.current) {
-          onCompleteRef.current(summary);
-        }
+    for (const [jointKey, jointData] of Object.entries(simMap)) {
+      if (jointData && jointData.hasValue) {
+        jointDiffAccRef.current[jointKey] = (jointDiffAccRef.current[jointKey] || 0) + jointData.diff;
+        jointCountAccRef.current[jointKey] = (jointCountAccRef.current[jointKey] || 0) + 1;
       }
     }
   }, []);
@@ -168,12 +212,11 @@ export function useHoldTimer({
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.hidden) {
-        lastTimestampRef.current = null;
-        if (phaseRef.current === 'holding') {
-          setIsTabPaused(true);
-        }
+        isTabPausedRef.current = true;
+        setIsTabPaused(true);
       } else {
         lastTimestampRef.current = performance.now();
+        isTabPausedRef.current = false;
         setIsTabPaused(false);
       }
     };

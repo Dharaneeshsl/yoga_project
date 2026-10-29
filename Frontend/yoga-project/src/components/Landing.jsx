@@ -8,13 +8,15 @@ const Landing = ({
   savedScores = {},
   onOpenSettings
 }) => {
+  const appName = import.meta.env.VITE_APP_NAME || 'PoseYoga';
+
   return (
     <div className="landing-container">
       {/* Hero Section */}
       <section className="hero-section">
         <div className="hero-badge">
           <span className="badge-dot"></span>
-          <span>Browser AI Yoga Assistant</span>
+          <span>{appName} — Browser AI Yoga Assistant</span>
         </div>
 
         <h1 className="hero-title">

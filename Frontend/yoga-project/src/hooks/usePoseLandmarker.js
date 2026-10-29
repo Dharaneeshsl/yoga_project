@@ -72,24 +72,53 @@ export function usePoseLandmarker() {
         setIsModelLoading(true);
         setModelProgress('Loading WebAssembly core...');
 
-        // 1. Try local wasm first, then pinned CDN
+        // 1. Verify if local wasm files exist before choosing local over CDN
         let vision;
+        let useLocalWasm = false;
         try {
-          vision = await FilesetResolver.forVisionTasks('/wasm');
+          const wasmCheck = await fetch('/wasm/vision_wasm_internal.wasm', { method: 'HEAD' });
+          if (wasmCheck.ok) {
+            useLocalWasm = true;
+          }
+        } catch {
+          useLocalWasm = false;
+        }
+
+        try {
+          if (useLocalWasm) {
+            vision = await FilesetResolver.forVisionTasks('/wasm');
+          } else {
+            vision = await FilesetResolver.forVisionTasks(PINNED_WASM_CDN);
+          }
         } catch (wasmErr) {
-          console.warn('Local WASM failed, falling back to pinned CDN:', wasmErr);
+          console.warn('WASM initialization fallback to CDN:', wasmErr);
           vision = await FilesetResolver.forVisionTasks(PINNED_WASM_CDN);
         }
 
         if (isCancelled) return;
         setModelProgress('Loading Pose AI model...');
 
-        // 2. Try local model first, then CDN
-        let landmarker;
+        // 2. Check if local model file exists before choosing local over CDN
+        let useLocalModel = false;
         try {
-          landmarker = await createLandmarkerWithFallback(vision, MODEL_LOCAL_PATH);
-        } catch (localModelErr) {
-          console.warn('Local model load failed, falling back to CDN:', localModelErr);
+          const modelCheck = await fetch(MODEL_LOCAL_PATH, { method: 'HEAD' });
+          // Ensure it exists and is an actual binary model, not Vite's index.html fallback
+          if (modelCheck.ok && modelCheck.headers.get('content-type') !== 'text/html') {
+            useLocalModel = true;
+          }
+        } catch {
+          useLocalModel = false;
+        }
+
+        let landmarker;
+        if (useLocalModel) {
+          try {
+            landmarker = await createLandmarkerWithFallback(vision, MODEL_LOCAL_PATH);
+          } catch (localModelErr) {
+            console.warn('Local model load failed, falling back to CDN:', localModelErr);
+            landmarker = await createLandmarkerWithFallback(vision, MODEL_CDN_FALLBACK);
+          }
+        } else {
           landmarker = await createLandmarkerWithFallback(vision, MODEL_CDN_FALLBACK);
         }
 

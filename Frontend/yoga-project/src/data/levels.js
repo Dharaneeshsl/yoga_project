@@ -195,6 +195,7 @@ export const LEVELS = [
     cameraTip: "Position your camera from the side (profile view) for optimal spine and limb tracking.",
     category: "Inversion & Flexibility",
     viewOrientation: "side",
+    isFloorPose: true,
     benefits: [
       "Calms the brain and helps relieve stress and mild fatigue",
       "Energizes the body and strengthens the arms and legs",
@@ -351,6 +352,7 @@ export const LEVELS = [
     cameraTip: "Place camera low on a table or book stack about 2–3 meters away, viewing your side profile.",
     category: "Spinal Extension",
     viewOrientation: "side",
+    isFloorPose: true,
     benefits: [
       "Strengthens the entire spine and posterior chain",
       "Opens the chest, heart center, lungs, and shoulders",

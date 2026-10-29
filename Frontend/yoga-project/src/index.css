@@ -690,6 +690,7 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   inset: 0;
   width: 100%;
   height: 100%;
+  object-fit: cover;
   pointer-events: none;
 }
 
@@ -1547,3 +1548,130 @@ input:checked + .slider:before {
     scroll-behavior: auto !important;
   }
 }
+
+/* ==========================================================================
+   Developer Calibration HUD Overlay & Orientation Pill
+   ========================================================================== */
+
+.orientation-pill {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #0284c7;
+  background: #e0f2fe;
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin-right: 4px;
+}
+
+.debug-hud-panel {
+  margin-top: 16px;
+  padding: 14px 18px;
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: var(--radius-md);
+  color: #f8fafc;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  box-shadow: var(--shadow-lg);
+}
+
+.debug-hud-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.debug-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  background: #f59e0b;
+  color: #000;
+  font-weight: 800;
+  font-size: 10px;
+  border-radius: 4px;
+  letter-spacing: 0.06em;
+}
+
+.debug-pose-info {
+  font-weight: 600;
+  color: #94a3b8;
+}
+
+.debug-copy-btn {
+  padding: 4px 10px;
+  background: #1e293b;
+  color: #38bdf8;
+  border: 1px solid #38bdf8;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.debug-copy-btn:hover {
+  background: #38bdf8;
+  color: #0f172a;
+}
+
+.debug-table-wrap {
+  overflow-x: auto;
+}
+
+.debug-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.debug-table th {
+  padding: 6px 10px;
+  background: #1e293b;
+  color: #94a3b8;
+  font-size: 11px;
+  text-transform: uppercase;
+  border-bottom: 1px solid #334155;
+}
+
+.debug-table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid #1e293b;
+}
+
+.debug-joint-name {
+  font-weight: 700;
+  color: #e2e8f0;
+}
+
+.debug-table tr.row-good td {
+  color: #34d399;
+}
+
+.debug-table tr.row-bad td {
+  color: #f87171;
+}
+
+.debug-status-pill {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.debug-status-pill.good {
+  background: rgba(16, 185, 129, 0.2);
+  color: #34d399;
+}
+
+.debug-status-pill.bad {
+  background: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+}
+

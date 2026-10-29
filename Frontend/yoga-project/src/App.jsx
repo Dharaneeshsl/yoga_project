@@ -11,6 +11,7 @@ import { useCamera } from './hooks/useCamera';
 import { usePoseLandmarker } from './hooks/usePoseLandmarker';
 import { useHoldTimer } from './hooks/useHoldTimer';
 import { useVoiceGuidance } from './hooks/useVoiceGuidance';
+import { parseUnlockedLevels, parseSavedScores } from './utils/storageUtils';
 
 const STORAGE_KEY_UNLOCKED = 'poseyoga_unlocked_levels';
 const STORAGE_KEY_SCORES = 'poseyoga_saved_scores';
@@ -29,17 +30,16 @@ function App() {
   const [sessionResults, setSessionResults] = useState([]);
   const [lastLevelResult, setLastLevelResult] = useState(null);
 
-  // Persistence: Unlocked levels (clamped between 1 and LEVELS.length)
+  // Persistence: Unlocked levels (clamped between 1 and LEVELS.length, with ?unlock=all demo shortcut)
   const [unlockedLevels, setUnlockedLevels] = useState(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY_UNLOCKED);
-      if (saved) {
-        const parsed = parseInt(saved, 10);
-        if (!isNaN(parsed) && parsed >= 1) {
-          return Math.min(LEVELS.length, parsed);
-        }
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('unlock') === 'all') {
+        return LEVELS.length;
       }
-      return 1;
+    }
+    try {
+      return parseUnlockedLevels(localStorage.getItem(STORAGE_KEY_UNLOCKED), LEVELS.length);
     } catch {
       return 1;
     }
@@ -48,14 +48,7 @@ function App() {
   // Persistence: Saved best scores
   const [savedScores, setSavedScores] = useState(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY_SCORES);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed && typeof parsed === 'object') {
-          return parsed;
-        }
-      }
-      return {};
+      return parseSavedScores(localStorage.getItem(STORAGE_KEY_SCORES));
     } catch {
       return {};
     }
@@ -169,15 +162,21 @@ function App() {
   // Starts when screen is 'level', camera is active, model is ready, and video element exists.
   // Stops cleanly whenever user leaves the level screen.
   const { startDetectionLoop, stopDetectionLoop, isModelLoading } = landmarker;
-  const { isActive: isCameraActive, videoRef } = camera;
+  const { isActive: isCameraActive, videoRef, pauseCameraTracks, resumeCameraTracks } = camera;
 
   useEffect(() => {
     if (screen === 'level' && isCameraActive && !isModelLoading && videoRef.current) {
+      resumeCameraTracks();
       startDetectionLoop(videoRef.current);
     } else {
       stopDetectionLoop();
+      if (screen === 'score') {
+        pauseCameraTracks();
+      } else if (screen === 'final' || screen === 'landing') {
+        camera.stopCamera();
+      }
     }
-  }, [screen, isCameraActive, isModelLoading, videoRef, startDetectionLoop, stopDetectionLoop]);
+  }, [screen, isCameraActive, isModelLoading, videoRef, startDetectionLoop, stopDetectionLoop, resumeCameraTracks, pauseCameraTracks, camera]);
 
   // Handle start from landing
   const handleStartPractice = useCallback(() => {

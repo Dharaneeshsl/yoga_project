@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState, useMemo, memo } from 'react';
-import { drawPoseSkeleton, computePoseSimilarity } from '../utils/poseUtils';
+import { drawPoseSkeleton, computePoseSimilarity, checkFullBodyInFrame } from '../utils/poseUtils';
 import { getTopCorrectionHint, HintDebouncer } from '../utils/poseFeedback';
 import { playCountdownTick, playSuccessChime } from '../utils/soundEffects';
 
@@ -64,7 +64,7 @@ const LevelScreen = ({
   landmarker,
   holdTimer,
   settings,
-  onFinishLevel,
+  _onFinishLevel,
   onExit,
   voice
 }) => {
@@ -72,33 +72,47 @@ const LevelScreen = ({
   const debouncerRef = useRef(new HintDebouncer(650, 2200));
   const hasAnnouncedHoldRef = useRef(false);
   const hasAnnouncedCompleteRef = useRef(false);
-  const completedOnceRef = useRef(false);
+  const lastSpokenJointRef = useRef(null);
 
   const [activeHint, setActiveHint] = useState(null);
   const [activeTab, setActiveTab] = useState('checklist'); // 'checklist' | 'guide' | 'benefits'
+  const [isCopiedDebug, setIsCopiedDebug] = useState(false);
+
+  const isDebugMode = useMemo(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('debug') === '1') return true;
+    }
+    return import.meta.env.VITE_ENABLE_DEBUG === 'true';
+  }, []);
 
   const { attachVideo, isActive: isCameraActive, isLoading: isCameraLoading, error: cameraError, startCamera } = camera;
-  const { detectedAngles, bodyCheck, isModelLoading, modelProgress, modelError, setOnFrameCallback } = landmarker;
+  const { detectedAngles, landmarks, isModelLoading, modelProgress, modelError, setOnFrameCallback } = landmarker;
+
+  // Level-aware body framing check (relaxes feet requirement for floor poses like Cobra and Downward Dog)
+  const bodyCheck = useMemo(() => {
+    return checkFullBodyInFrame(landmarks, 0.45, {
+      requireFeet: !levelData.isFloorPose,
+      minRequiredParts: levelData.isFloorPose ? 6 : 7
+    });
+  }, [landmarks, levelData.isFloorPose]);
   const {
     phase,
     countdownRemaining,
-    holdElapsed,
     holdProgressPct,
     secondsRemaining,
     isCurrentlyInPose,
     isTabPaused,
-    completedPayloadRef,
     startRun,
     reset,
     updatePoseStatus
   } = holdTimer;
 
-  // Reset hint debouncer and completion guards when level changes
+  // Reset hint debouncer and announcement guards when level changes
   useEffect(() => {
     debouncerRef.current.clear();
     hasAnnouncedHoldRef.current = false;
     hasAnnouncedCompleteRef.current = false;
-    completedOnceRef.current = false;
     setActiveHint(null);
   }, [levelData.id]);
 
@@ -121,6 +135,7 @@ const LevelScreen = ({
   }, [simResult.overall, simResult.map, simResult.isMirrored, bodyCheck.isReady, phase, updatePoseStatus]);
 
   // Handle corrective hints debouncing (throttled at ~5 Hz)
+  // Speaks each hint once, and only speaks again when the joint changes
   useEffect(() => {
     if (phase === 'holding') {
       const topHint = getTopCorrectionHint(simResult.map);
@@ -128,11 +143,17 @@ const LevelScreen = ({
       setActiveHint(debounced);
 
       if (debounced && settings.voiceEnabled) {
-        voice.speak(debounced.instruction);
+        if (lastSpokenJointRef.current !== debounced.joint) {
+          lastSpokenJointRef.current = debounced.joint;
+          voice.speak(debounced.instruction);
+        }
+      } else if (!debounced) {
+        lastSpokenJointRef.current = null;
       }
     } else {
       debouncerRef.current.clear();
       setActiveHint(null);
+      lastSpokenJointRef.current = null;
     }
   }, [simResult.map, phase, settings.voiceEnabled, voice]);
 
@@ -167,26 +188,6 @@ const LevelScreen = ({
       hasAnnouncedCompleteRef.current = false;
     }
   }, [phase, countdownRemaining, voice, settings.voiceEnabled]);
-
-  // Level completion handler: triggered reliably once without simResult race condition
-  useEffect(() => {
-    if (phase === 'completed' && !completedOnceRef.current) {
-      completedOnceRef.current = true;
-      const finalPayload = completedPayloadRef.current || {
-        score: liveSimilarityPct,
-        holdElapsed,
-        simMap: simResult.map,
-        isMirrored: simResult.isMirrored,
-        isPassed: liveSimilarityPct >= 60
-      };
-
-      const timer = setTimeout(() => {
-        onFinishLevel(finalPayload);
-      }, 500);
-
-      return () => clearTimeout(timer);
-    }
-  }, [phase, onFinishLevel, completedPayloadRef, liveSimilarityPct, holdElapsed, simResult]);
 
   // High-FPS Direct Canvas Drawing: subscribes directly to PoseLandmarker frame pipeline
   useEffect(() => {
@@ -438,6 +439,61 @@ const LevelScreen = ({
                 </div>
               </div>
             )}
+
+            {/* Developer Calibration HUD Overlay */}
+            {isDebugMode && (
+              <div className="debug-hud-panel" role="region" aria-label="PoseYoga Developer Angle Calibration Overlay">
+                <div className="debug-hud-header">
+                  <span className="debug-badge">DEV DEBUG HUD</span>
+                  <span className="debug-pose-info">{levelData.name} ({simResult.isMirrored ? 'Mirrored Side' : 'Primary Side'})</span>
+                  <button
+                    type="button"
+                    className="debug-copy-btn"
+                    onClick={() => {
+                      navigator.clipboard?.writeText(JSON.stringify(detectedAngles, null, 2));
+                      setIsCopiedDebug(true);
+                      setTimeout(() => setIsCopiedDebug(false), 2000);
+                    }}
+                  >
+                    {isCopiedDebug ? 'Copied Angles!' : 'Copy Angles JSON'}
+                  </button>
+                </div>
+                <div className="debug-table-wrap">
+                  <table className="debug-table">
+                    <thead>
+                      <tr>
+                        <th>Joint</th>
+                        <th>Target</th>
+                        <th>Live</th>
+                        <th>Diff</th>
+                        <th>Tol</th>
+                        <th>Match</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Object.entries(simResult.map || {}).map(([joint, info]) => {
+                        const currentVal = detectedAngles[joint];
+                        const targetVal = simResult.isMirrored ? levelData.mirroredAngles?.[joint] : levelData.angles?.[joint];
+                        return (
+                          <tr key={joint} className={info.isGood ? 'row-good' : 'row-bad'}>
+                            <td className="debug-joint-name">{joint}</td>
+                            <td>{targetVal !== undefined ? `${Math.round(targetVal)}°` : '—'}</td>
+                            <td>{currentVal !== undefined ? `${Math.round(currentVal)}°` : '—'}</td>
+                            <td>{info.diff !== undefined ? `${Math.round(info.diff)}°` : '—'}</td>
+                            <td>±{info.tol}°</td>
+                            <td>
+                              <span className={`debug-status-pill ${info.isGood ? 'good' : 'bad'}`}>
+                                {Math.round((info.score || 0) * 100)}%
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -490,7 +546,10 @@ const LevelScreen = ({
                   <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
                   <circle cx="12" cy="13" r="4"></circle>
                 </svg>
-                <span><strong>Setup Tip:</strong> {levelData.cameraTip}</span>
+                <span>
+                  {levelData.viewOrientation && <span className="orientation-pill">{levelData.viewOrientation}: </span>}
+                  <strong>Setup Tip:</strong> {levelData.cameraTip}
+                </span>
               </div>
             )}
           </div>

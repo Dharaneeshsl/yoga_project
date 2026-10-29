@@ -113,7 +113,28 @@ export function useCamera() {
         });
       }
 
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      let stream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia(constraints);
+      } catch (firstErr) {
+        // Fall back to facingMode: 'user' if target deviceId throws OverconstrainedError or NotFound
+        if (targetDevice && (firstErr.name === 'OverconstrainedError' || firstErr.name === 'NotFoundError')) {
+          console.warn('Target camera device unavailable, falling back to facingMode: user:', firstErr);
+          setSelectedDeviceIdState('');
+          const fallbackConstraints = {
+            audio: false,
+            video: {
+              facingMode: 'user',
+              width: { ideal: 1280, min: 640 },
+              height: { ideal: 720, min: 480 }
+            }
+          };
+          stream = await navigator.mediaDevices.getUserMedia(fallbackConstraints);
+        } else {
+          throw firstErr;
+        }
+      }
+
       streamRef.current = stream;
 
       if (videoElementRef.current) {
@@ -158,6 +179,22 @@ export function useCamera() {
 
   const clearError = useCallback(() => setError(null), []);
 
+  const pauseCameraTracks = useCallback(() => {
+    if (streamRef.current) {
+      streamRef.current.getVideoTracks().forEach(track => {
+        track.enabled = false;
+      });
+    }
+  }, []);
+
+  const resumeCameraTracks = useCallback(() => {
+    if (streamRef.current) {
+      streamRef.current.getVideoTracks().forEach(track => {
+        track.enabled = true;
+      });
+    }
+  }, []);
+
   // Clean up stream tracks on component unmount
   useEffect(() => {
     return () => {
@@ -177,6 +214,8 @@ export function useCamera() {
     setSelectedDeviceId,
     startCamera,
     stopCamera,
+    pauseCameraTracks,
+    resumeCameraTracks,
     clearError
   }), [
     attachVideo,
@@ -188,6 +227,8 @@ export function useCamera() {
     setSelectedDeviceId,
     startCamera,
     stopCamera,
+    pauseCameraTracks,
+    resumeCameraTracks,
     clearError
   ]);
 }

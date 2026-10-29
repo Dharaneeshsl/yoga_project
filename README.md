@@ -67,8 +67,9 @@ yoga-project/
 
 ### 1. Prerequisites
 
-- [Node.js](https://nodejs.org/) (version 18+ recommended)
+- [Node.js](https://nodejs.org/) (version 20.19+ or 22+ recommended for Vite 7)
 - A modern web browser (Chrome, Brave, Edge, Firefox, or Safari) with webcam access
+- HTTPS context or `localhost` (required by browser security policies for webcam access)
 
 ### 2. Install Dependencies
 
@@ -99,7 +100,7 @@ This generates an optimized production bundle inside `Frontend/yoga-project/dist
 
 ## 🧪 Testing & Code Quality
 
-Run the unit test suite covering 2D angle geometry, visibility checks, hint direction logic, and tolerance prioritization:
+Run the unit test suite covering 2D angle geometry, visibility checks, hint direction logic, real storage parsers, and continuous hold progression:
 
 ```bash
 npm run test
@@ -110,6 +111,14 @@ Run static analysis and linting:
 ```bash
 npm run lint
 ```
+
+---
+
+## 🛠️ Developer & Demo Tools
+
+- **Live Calibration HUD**: Append `?debug=1` to any URL or set `VITE_ENABLE_DEBUG=true` in `.env.local` to open an on-screen engineering HUD displaying live joint angles, targets, diffs, tolerances, and a one-click **Copy Angles JSON** button for pose calibration.
+- **Instant Demo Unlock**: Append `?unlock=all` to the URL (e.g., `http://localhost:5173/?unlock=all`) to immediately unlock all 5 curriculum levels without needing to pass each posture live in a demonstration.
+- **Offline & Model Caching**: On initial `npm install`, a postinstall script automatically copies WASM assets from `@mediapipe/tasks-vision` to `public/wasm/` and attempts to cache `pose_landmarker_lite.task` in `public/models/`. If offline, the app seamlessly falls back to the pinned version on jsdelivr CDN.
 
 ---
 

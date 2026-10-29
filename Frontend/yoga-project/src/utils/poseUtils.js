@@ -99,13 +99,16 @@ export function mapLandmarks(landmarks, width = 640, height = 480, minVisibility
 /**
  * Validates that user's full body (head, shoulders, hips, knees, ankles) is visible.
  */
-export function checkFullBodyInFrame(landmarks, minVisibility = 0.45) {
+export function checkFullBodyInFrame(landmarks, minVisibility = 0.45, options = {}) {
+  const { requireFeet = true, minRequiredParts = 7 } = options;
+
   if (!landmarks || landmarks.length === 0) {
     return {
       isReady: false,
       message: "No person detected. Please step into the camera view.",
       visibleCount: 0,
-      totalRequired: 8
+      totalRequired: 8,
+      missingParts: ['Body']
     };
   }
 
@@ -126,7 +129,10 @@ export function checkFullBodyInFrame(landmarks, minVisibility = 0.45) {
   for (const item of checkKeys) {
     const found = item.key.some(idx => {
       const lm = landmarks[idx];
-      return lm && (lm.visibility === undefined || lm.visibility >= minVisibility);
+      // Check both visibility threshold AND bounds inside [0, 1] camera frame
+      const isVisible = lm && (lm.visibility === undefined || lm.visibility >= minVisibility);
+      const isWithinBounds = lm && lm.x >= 0 && lm.x <= 1 && lm.y >= 0 && lm.y <= 1;
+      return isVisible && isWithinBounds;
     });
 
     if (found) {
@@ -137,10 +143,14 @@ export function checkFullBodyInFrame(landmarks, minVisibility = 0.45) {
   }
 
   const hasFeet = !missingParts.includes('Feet / Ankles');
-  const isReady = visibleCount >= 7 && hasFeet; // Must have feet and at least 7/8 key parts
+  // For ground or inverted poses (Cobra, Downward Dog), feet requirement can be relaxed
+  const feetSatisfied = requireFeet ? hasFeet : true;
+  const threshold = Math.min(minRequiredParts, checkKeys.length);
+  const isReady = visibleCount >= threshold && feetSatisfied;
+
   let message = "Perfect! Your full body is in frame.";
   if (!isReady) {
-    if (missingParts.includes('Feet / Ankles')) {
+    if (requireFeet && missingParts.includes('Feet / Ankles')) {
       message = "Step back until your feet and mat are visible.";
     } else if (missingParts.includes('Head')) {
       message = "Adjust your camera so your head is visible.";

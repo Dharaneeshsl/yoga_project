@@ -50,6 +50,24 @@ describe('Pose Visibility: checkFullBodyInFrame', () => {
     assert.equal(result.isReady, false);
     assert.ok(result.missingParts.includes('Feet / Ankles'));
   });
+
+  it('reports isReady=false when landmarks fall outside [0, 1] frame bounds', () => {
+    const landmarks = Array.from({ length: 33 }, () => ({ x: 0.5, y: 0.5, visibility: 0.9 }));
+    // Landmark extrapolated beyond viewport (e.g. feet cut off below camera: y > 1.0)
+    landmarks[27].y = 1.15;
+    landmarks[28].y = 1.12;
+    const result = checkFullBodyInFrame(landmarks);
+    assert.equal(result.isReady, false);
+    assert.ok(result.missingParts.includes('Feet / Ankles'));
+  });
+
+  it('relaxes feet requirement for floor/inverted poses when requireFeet=false', () => {
+    const landmarks = Array.from({ length: 33 }, () => ({ x: 0.5, y: 0.5, visibility: 0.9 }));
+    landmarks[27].visibility = 0.1;
+    landmarks[28].visibility = 0.1;
+    const result = checkFullBodyInFrame(landmarks, 0.45, { requireFeet: false, minRequiredParts: 6 });
+    assert.equal(result.isReady, true);
+  });
 });
 
 describe('Corrective Feedback Directions: generateJointInstruction', () => {
