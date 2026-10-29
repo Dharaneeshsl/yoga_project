@@ -64,6 +64,7 @@ const LevelScreen = ({
   landmarker,
   holdTimer,
   settings,
+  diffConfig,
   _onFinishLevel,
   onExit,
   voice
@@ -89,13 +90,23 @@ const LevelScreen = ({
   const { attachVideo, isActive: isCameraActive, isLoading: isCameraLoading, error: cameraError, startCamera } = camera;
   const { detectedAngles, landmarks, isModelLoading, modelProgress, modelError, setOnFrameCallback } = landmarker;
 
+  // Auto-attempt camera start on mount if not currently active or loading and no error
+  useEffect(() => {
+    if (!isCameraActive && !isCameraLoading && !cameraError) {
+      startCamera();
+    }
+  }, [isCameraActive, isCameraLoading, cameraError, startCamera]);
+
   // Level-aware body framing check (relaxes feet requirement for floor poses like Cobra and Downward Dog)
   const bodyCheck = useMemo(() => {
+    const isFloor = Boolean(levelData.isFloorPose);
+    const minParts = isFloor ? 5 : (levelData.viewOrientation === 'front' ? 7 : 6);
     return checkFullBodyInFrame(landmarks, 0.45, {
-      requireFeet: !levelData.isFloorPose,
-      minRequiredParts: levelData.isFloorPose ? 6 : 7
+      requireFeet: !isFloor,
+      minRequiredParts: minParts
     });
-  }, [landmarks, levelData.isFloorPose]);
+  }, [landmarks, levelData.isFloorPose, levelData.viewOrientation]);
+
   const {
     phase,
     countdownRemaining,
@@ -113,17 +124,19 @@ const LevelScreen = ({
     debouncerRef.current.clear();
     hasAnnouncedHoldRef.current = false;
     hasAnnouncedCompleteRef.current = false;
+    lastSpokenJointRef.current = null;
     setActiveHint(null);
   }, [levelData.id]);
 
   // Compute live similarity against target pose
   const simResult = useMemo(() => {
+    const diffMultiplier = (diffConfig && diffConfig.multiplier) || settings.difficultyMultiplier || 1.0;
     return computePoseSimilarity(
       detectedAngles,
       levelData,
-      settings.difficultyMultiplier || 1.0
+      diffMultiplier
     );
-  }, [detectedAngles, levelData, settings.difficultyMultiplier]);
+  }, [detectedAngles, levelData, diffConfig, settings.difficultyMultiplier]);
 
   const liveSimilarityPct = Math.round(simResult.overall * 100);
 
@@ -143,8 +156,9 @@ const LevelScreen = ({
       setActiveHint(debounced);
 
       if (debounced && settings.voiceEnabled) {
-        if (lastSpokenJointRef.current !== debounced.joint) {
-          lastSpokenJointRef.current = debounced.joint;
+        const jointKey = debounced.jointKey || debounced.joint;
+        if (lastSpokenJointRef.current !== jointKey) {
+          lastSpokenJointRef.current = jointKey;
           voice.speak(debounced.instruction);
         }
       } else if (!debounced) {
@@ -238,9 +252,17 @@ const LevelScreen = ({
         </div>
 
         <div className="top-bar-controls">
-          <span className={`pill-status ${bodyCheck.isReady ? 'status-ready' : 'status-pending'}`}>
+          <span className={`pill-status ${
+            !isCameraActive ? 'status-pending' :
+            isModelLoading ? 'status-pending' :
+            bodyCheck.isReady ? 'status-ready' : 'status-pending'
+          }`}>
             <span className="status-dot"></span>
-            <span>{bodyCheck.isReady ? 'Full Body in Frame' : 'Step Back to Frame'}</span>
+            <span>
+              {!isCameraActive ? (isCameraLoading ? 'Starting Camera...' : 'Camera Inactive') :
+               isModelLoading ? 'Loading AI Model...' :
+               bodyCheck.isReady ? 'Full Body in Frame' : 'Step Back to Frame'}
+            </span>
           </span>
         </div>
       </div>
@@ -261,7 +283,7 @@ const LevelScreen = ({
               {/* Similarity Pill */}
               <div className="metric-pill">
                 <span className="metric-label">Match</span>
-                <span className="metric-val">{isCameraActive ? `${liveSimilarityPct}%` : '—'}</span>
+                <span className="metric-val">{isCameraActive && !isModelLoading && landmarks.length > 0 ? `${liveSimilarityPct}%` : '—'}</span>
               </div>
 
               {/* Circular Hold Progress */}
@@ -314,7 +336,7 @@ const LevelScreen = ({
             />
 
             {/* Pre-Flight Silhouette Guide Overlay */}
-            {!bodyCheck.isReady && isCameraActive && (
+            {!bodyCheck.isReady && isCameraActive && !isModelLoading && (
               <div className="framing-guide-overlay">
                 <div className="body-silhouette-guide"></div>
                 <div className="framing-guide-text" role="status">
@@ -361,7 +383,7 @@ const LevelScreen = ({
               </div>
             )}
 
-            {/* Camera Permission / Device Error Overlay */}
+            {/* Camera Permission / Device Error Overlay with Actionable Recovery Instructions */}
             {cameraError && (
               <div className="error-overlay" role="alert">
                 <div className="error-card">
@@ -372,6 +394,22 @@ const LevelScreen = ({
                   </svg>
                   <h3>Camera Access Required</h3>
                   <p>{cameraError.message}</p>
+
+                  {cameraError.type === 'PERMISSION_DENIED' && (
+                    <div className="error-recovery-box">
+                      <p className="recovery-title">How to enable access:</p>
+                      <ol className="recovery-steps">
+                        <li>Click the lock or camera icon in your browser address bar.</li>
+                        <li>Switch Camera from "Block" to "Allow".</li>
+                        <li>Click "Try Again" below.</li>
+                      </ol>
+                    </div>
+                  )}
+
+                  {cameraError.type === 'IN_USE' && (
+                    <p className="error-tip">Please close other applications (such as Zoom, Teams, or another browser window) using your webcam and try again.</p>
+                  )}
+
                   <button className="btn btn-primary" onClick={() => startCamera()}>
                     Try Again
                   </button>
@@ -414,7 +452,7 @@ const LevelScreen = ({
                   <button
                     className="btn btn-primary btn-large"
                     onClick={startRun}
-                    disabled={!bodyCheck.isReady}
+                    disabled={!bodyCheck.isReady || !isCameraActive || isModelLoading}
                   >
                     <span>Begin Hold ({settings.holdDuration}s)</span>
                   </button>
@@ -430,9 +468,15 @@ const LevelScreen = ({
                       {isCurrentlyInPose ? 'Holding Pose! Maintain...' : 'Re-align to continue timer'}
                     </span>
                   ) : phase === 'countdown' ? (
-                    <span className="status-pill countdown">Get into posture</span>
+                    <span className="status-pill countdown">Get into posture ({countdownRemaining}s)</span>
+                  ) : !isCameraActive ? (
+                    <span className="status-pill pending">
+                      {isCameraLoading ? 'Starting webcam...' : 'Webcam not active'}
+                    </span>
+                  ) : isModelLoading ? (
+                    <span className="status-pill pending">Initializing Pose AI...</span>
                   ) : (
-                    <span className="status-pill ready">
+                    <span className={`status-pill ${bodyCheck.isReady ? 'ready' : 'pending'}`}>
                       {bodyCheck.isReady ? 'Ready! Press Begin' : 'Step back to frame body'}
                     </span>
                   )}
@@ -458,6 +502,7 @@ const LevelScreen = ({
                     {isCopiedDebug ? 'Copied Angles!' : 'Copy Angles JSON'}
                   </button>
                 </div>
+
                 <div className="debug-table-wrap">
                   <table className="debug-table">
                     <thead>

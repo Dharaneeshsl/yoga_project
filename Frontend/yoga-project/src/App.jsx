@@ -18,9 +18,9 @@ const STORAGE_KEY_SCORES = 'poseyoga_saved_scores';
 const STORAGE_KEY_SETTINGS = 'poseyoga_user_settings';
 
 const DIFFICULTY_MAP = {
-  gentle: { similarityThreshold: 0.58, passScoreThreshold: 50 },
-  standard: { similarityThreshold: 0.65, passScoreThreshold: 60 },
-  strict: { similarityThreshold: 0.75, passScoreThreshold: 70 }
+  gentle: { similarityThreshold: 0.58, passScoreThreshold: 50, multiplier: 1.25 },
+  standard: { similarityThreshold: 0.65, passScoreThreshold: 60, multiplier: 1.0 },
+  strict: { similarityThreshold: 0.75, passScoreThreshold: 70, multiplier: 0.8 }
 };
 
 function App() {
@@ -103,13 +103,15 @@ function App() {
   // Handle level completion
   const handleFinishLevel = useCallback((levelRunData) => {
     const currentLevel = LEVELS[currentLevelIndex];
-    const score = Math.round(levelRunData.score !== undefined ? levelRunData.score : (levelRunData.similarityAvg || 0));
+    const rawScore = levelRunData.score !== undefined ? levelRunData.score : (levelRunData.similarityAvg || 0);
+    const score = Math.max(0, Math.min(100, Math.round(rawScore)));
     const isPassed = Boolean(levelRunData.isPassed !== undefined ? levelRunData.isPassed : score >= diffConfig.passScoreThreshold);
 
     const resultEntry = {
       levelId: currentLevel.id,
       levelName: currentLevel.name,
       score,
+      passThreshold: diffConfig.passScoreThreshold,
       holdSeconds: levelRunData.holdElapsed,
       simMap: levelRunData.simMap,
       isMirrored: levelRunData.isMirrored,
@@ -124,7 +126,7 @@ function App() {
       return updated;
     });
 
-    // Save score in localStorage
+    // Save score in localStorage (never decreases)
     setSavedScores(prev => {
       const currentBest = prev[currentLevel.id] || 0;
       const updated = { ...prev, [currentLevel.id]: Math.max(currentBest, score) };
@@ -162,7 +164,14 @@ function App() {
   // Starts when screen is 'level', camera is active, model is ready, and video element exists.
   // Stops cleanly whenever user leaves the level screen.
   const { startDetectionLoop, stopDetectionLoop, isModelLoading } = landmarker;
-  const { isActive: isCameraActive, videoRef, pauseCameraTracks, resumeCameraTracks } = camera;
+  const {
+    isActive: isCameraActive,
+    videoRef,
+    pauseCameraTracks,
+    resumeCameraTracks,
+    stopCamera,
+    startCamera
+  } = camera;
 
   useEffect(() => {
     if (screen === 'level' && isCameraActive && !isModelLoading && videoRef.current) {
@@ -173,23 +182,27 @@ function App() {
       if (screen === 'score') {
         pauseCameraTracks();
       } else if (screen === 'final' || screen === 'landing') {
-        camera.stopCamera();
+        stopCamera();
       }
     }
-  }, [screen, isCameraActive, isModelLoading, videoRef, startDetectionLoop, stopDetectionLoop, resumeCameraTracks, pauseCameraTracks, camera]);
+  }, [screen, isCameraActive, isModelLoading, videoRef, startDetectionLoop, stopDetectionLoop, resumeCameraTracks, pauseCameraTracks, stopCamera]);
 
-  // Handle start from landing
+  // Handle start from landing (first-click camera trigger)
   const handleStartPractice = useCallback(() => {
+    holdTimer.reset();
     setCurrentLevelIndex(0);
     setSessionResults([]);
     setScreen('level');
-  }, []);
+    startCamera();
+  }, [holdTimer, startCamera]);
 
-  // Handle direct level select from landing
+  // Handle direct level select from landing (first-click camera trigger)
   const handleSelectLevel = useCallback((index) => {
+    holdTimer.reset();
     setCurrentLevelIndex(index);
     setScreen('level');
-  }, []);
+    startCamera();
+  }, [holdTimer, startCamera]);
 
   // Navigate to next level
   const handleNextLevel = useCallback(() => {
@@ -211,20 +224,20 @@ function App() {
   // Exit practice back to landing
   const handleExitPractice = useCallback(() => {
     holdTimer.reset();
-    camera.stopCamera();
+    stopCamera();
     voice.stop();
     setScreen('landing');
-  }, [camera, holdTimer, voice]);
+  }, [stopCamera, holdTimer, voice]);
 
   // Restart practice from beginning
   const handleRestartPractice = useCallback(() => {
     holdTimer.reset();
-    camera.stopCamera();
+    stopCamera();
     voice.stop();
     setSessionResults([]);
     setCurrentLevelIndex(0);
     setScreen('landing');
-  }, [camera, holdTimer, voice]);
+  }, [stopCamera, holdTimer, voice]);
 
   // Download results JSON
   const handleDownloadResults = useCallback(() => {
@@ -302,6 +315,7 @@ function App() {
             landmarker={landmarker}
             holdTimer={holdTimer}
             settings={settings}
+            diffConfig={diffConfig}
             onFinishLevel={handleFinishLevel}
             onExit={handleExitPractice}
             voice={voice}

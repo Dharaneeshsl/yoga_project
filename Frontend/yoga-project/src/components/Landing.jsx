@@ -51,7 +51,7 @@ const Landing = ({
             <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
             <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
           </svg>
-          <span><strong>100% On-Device Privacy:</strong> Video is processed locally in WebAssembly. No camera streams ever leave your computer.</span>
+          <span><strong>100% On-Device Privacy:</strong> Video is processed locally in your browser using WebAssembly. No camera streams or biometric frames are ever transmitted across the network.</span>
         </div>
       </section>
 
@@ -79,7 +79,7 @@ const Landing = ({
             <div className="step-num">3</div>
             <h3 className="step-title">Hold Steadily</h3>
             <p className="step-desc">
-              Maintain the posture continuously for 30 seconds to lock in muscle memory and unlock the next level.
+              Maintain the posture continuously for your chosen duration to lock in muscle memory and unlock the next level.
             </p>
           </div>
         </div>

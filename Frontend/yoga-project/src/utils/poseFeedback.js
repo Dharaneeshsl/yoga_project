@@ -1,7 +1,7 @@
 // Natural language corrective feedback engine with correct anatomical directions,
 // tolerance-normalized prioritization, and persistent debounce.
 
-const JOINT_NAMES = {
+export const JOINT_NAMES = {
   LShoulder: 'Left Arm / Shoulder',
   RShoulder: 'Right Arm / Shoulder',
   LElbow: 'Left Elbow',
@@ -86,6 +86,7 @@ export function getTopCorrectionHint(simMap, minimumSeverityRatio = 1.05) {
   const instruction = generateJointInstruction(worstJoint, worstData.current, worstData.target);
 
   return {
+    joint: worstJoint,
     jointKey: worstJoint,
     jointName: JOINT_NAMES[worstJoint] || worstJoint,
     instruction,
@@ -146,6 +147,8 @@ export class HintDebouncer {
 
   clear() {
     this.candidateJoint = null;
+    this.candidateFirstSeenAt = 0;
+    this.lastEmittedAt = 0;
     this.activeHint = null;
   }
 }

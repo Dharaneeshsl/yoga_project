@@ -37,7 +37,7 @@ export function useHoldTimer({
   const completedOnceRef = useRef(false);
 
   // Statistics accumulators over the entire hold duration
-  // Samples every frame during the holding phase so scores reflect true performance
+  // Samples every frame during active pose holding so scores reflect true performance
   const similaritySamplesRef = useRef([]);
   const jointDiffAccRef = useRef({});
   const jointCountAccRef = useRef({});
@@ -78,7 +78,7 @@ export function useHoldTimer({
     lastSimMapRef.current = {};
   }, [countdownSeconds]);
 
-  // Complete level run and notify caller
+  // Complete level run and notify caller (guarded against multiple triggers)
   const finishRun = useCallback(() => {
     if (completedOnceRef.current) return;
     completedOnceRef.current = true;
@@ -91,7 +91,7 @@ export function useHoldTimer({
     phaseRef.current = 'completed';
     setPhase('completed');
 
-    // Calculate score using every frame sampled during the hold attempt
+    // Calculate score using every frame sampled while in pose
     const samples = similaritySamplesRef.current;
     const { score, isPassed } = computeHoldScore(samples, passScoreThresholdRef.current);
 
@@ -147,7 +147,7 @@ export function useHoldTimer({
       const deltaSeconds = (now - (lastTimestampRef.current || now)) / 1000;
       lastTimestampRef.current = now;
 
-      // Advance hold elapsed time when user is actively in pose
+      // Advance hold elapsed time ONLY when user is actively in pose and framed
       if (isCurrentlyInPoseRef.current && deltaSeconds > 0 && deltaSeconds < 1.0) {
         holdElapsedRef.current += deltaSeconds;
         const currentElapsed = Math.min(targetDurationRef.current, holdElapsedRef.current);
@@ -196,14 +196,15 @@ export function useHoldTimer({
     lastSimMapRef.current = simMap;
     lastIsMirroredRef.current = isMirrored;
 
-    // Sample every frame during the active hold phase (both in-pose and out-of-pose)
-    // so the final score accurately reflects the user's consistency and quality!
-    similaritySamplesRef.current.push(similarity);
+    // Sample frames while actively holding the pose so the final score reflects true posture alignment
+    if (meetsPose) {
+      similaritySamplesRef.current.push(similarity);
 
-    for (const [jointKey, jointData] of Object.entries(simMap)) {
-      if (jointData && jointData.hasValue) {
-        jointDiffAccRef.current[jointKey] = (jointDiffAccRef.current[jointKey] || 0) + jointData.diff;
-        jointCountAccRef.current[jointKey] = (jointCountAccRef.current[jointKey] || 0) + 1;
+      for (const [jointKey, jointData] of Object.entries(simMap)) {
+        if (jointData && jointData.hasValue) {
+          jointDiffAccRef.current[jointKey] = (jointDiffAccRef.current[jointKey] || 0) + jointData.diff;
+          jointCountAccRef.current[jointKey] = (jointCountAccRef.current[jointKey] || 0) + 1;
+        }
       }
     }
   }, []);

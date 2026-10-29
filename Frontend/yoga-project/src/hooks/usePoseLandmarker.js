@@ -62,6 +62,7 @@ export function usePoseLandmarker() {
   const activeVideoRef = useRef(null);
   const onFrameCallbackRef = useRef(null);
   const triggerDetectionLoopRef = useRef(null);
+  const hasLoggedErrorRef = useRef(false);
 
   // Initialize model
   useEffect(() => {
@@ -72,12 +73,13 @@ export function usePoseLandmarker() {
         setIsModelLoading(true);
         setModelProgress('Loading WebAssembly core...');
 
-        // 1. Verify if local wasm files exist before choosing local over CDN
+        // 1. Verify if local wasm files exist and are actual binary assets before choosing local over CDN
         let vision;
         let useLocalWasm = false;
         try {
           const wasmCheck = await fetch('/wasm/vision_wasm_internal.wasm', { method: 'HEAD' });
-          if (wasmCheck.ok) {
+          const ct = wasmCheck.headers.get('content-type') || '';
+          if (wasmCheck.ok && !ct.includes('text/html')) {
             useLocalWasm = true;
           }
         } catch {
@@ -102,8 +104,9 @@ export function usePoseLandmarker() {
         let useLocalModel = false;
         try {
           const modelCheck = await fetch(MODEL_LOCAL_PATH, { method: 'HEAD' });
+          const ct = modelCheck.headers.get('content-type') || '';
           // Ensure it exists and is an actual binary model, not Vite's index.html fallback
-          if (modelCheck.ok && modelCheck.headers.get('content-type') !== 'text/html') {
+          if (modelCheck.ok && !ct.includes('text/html')) {
             useLocalModel = true;
           }
         } catch {
@@ -123,7 +126,7 @@ export function usePoseLandmarker() {
         }
 
         if (isCancelled) {
-          landmarker.close();
+          try { landmarker.close(); } catch (e) { void e; }
           return;
         }
 
@@ -148,6 +151,15 @@ export function usePoseLandmarker() {
 
     return () => {
       isCancelled = true;
+      isDetectingRef.current = false;
+      if (animFrameIdRef.current) {
+        cancelAnimationFrame(animFrameIdRef.current);
+        animFrameIdRef.current = null;
+      }
+      if (activeVideoRef.current && videoFrameCallbackIdRef.current && activeVideoRef.current.cancelVideoFrameCallback) {
+        activeVideoRef.current.cancelVideoFrameCallback(videoFrameCallbackIdRef.current);
+        videoFrameCallbackIdRef.current = null;
+      }
       if (landmarkerRef.current) {
         try {
           landmarkerRef.current.close();
@@ -174,6 +186,8 @@ export function usePoseLandmarker() {
 
         try {
           const results = landmarkerRef.current.detectForVideo(videoElement, timestamp);
+          hasLoggedErrorRef.current = false; // Reset error guard on successful frame
+
           if (results && results.landmarks && results.landmarks.length > 0) {
             const detected = results.landmarks[0];
             latestLandmarksRef.current = detected;
@@ -223,7 +237,10 @@ export function usePoseLandmarker() {
             setBodyCheck(latestBodyCheckRef.current);
           }
         } catch (detErr) {
-          console.warn('Detection frame error:', detErr);
+          if (!hasLoggedErrorRef.current) {
+            hasLoggedErrorRef.current = true;
+            console.warn('Detection frame error:', detErr);
+          }
         }
       }
     }
@@ -258,9 +275,16 @@ export function usePoseLandmarker() {
   const startDetectionLoop = useCallback((videoElement) => {
     if (!videoElement) return;
     activeVideoRef.current = videoElement;
-    isDetectingRef.current = true;
 
-    // Cancel existing loop before starting new one
+    // Prevent duplicate loop restarts if already running on this video
+    if (isDetectingRef.current && (animFrameIdRef.current || videoFrameCallbackIdRef.current)) {
+      return;
+    }
+
+    isDetectingRef.current = true;
+    lastVideoTimeRef.current = -1;
+
+    // Cancel any stale callbacks before initiating fresh step
     if (animFrameIdRef.current) {
       cancelAnimationFrame(animFrameIdRef.current);
       animFrameIdRef.current = null;
@@ -277,6 +301,8 @@ export function usePoseLandmarker() {
 
   const stopDetectionLoop = useCallback(() => {
     isDetectingRef.current = false;
+    lastVideoTimeRef.current = -1;
+
     if (animFrameIdRef.current) {
       cancelAnimationFrame(animFrameIdRef.current);
       animFrameIdRef.current = null;

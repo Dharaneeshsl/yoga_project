@@ -7,7 +7,7 @@ export function useVoiceGuidance(enabled = true) {
 
   // Populate voices including asynchronous loading
   useEffect(() => {
-    if (!window.speechSynthesis) return;
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
 
     const updateVoices = () => {
       try {
@@ -23,8 +23,31 @@ export function useVoiceGuidance(enabled = true) {
     }
   }, []);
 
+  // Cancel any ongoing speech immediately if voice is disabled or component unmounts
+  useEffect(() => {
+    if (!enabled && typeof window !== 'undefined' && window.speechSynthesis) {
+      try {
+        window.speechSynthesis.cancel();
+      } catch (e) {
+        void e;
+      }
+    }
+  }, [enabled]);
+
+  useEffect(() => {
+    return () => {
+      if (typeof window !== 'undefined' && window.speechSynthesis) {
+        try {
+          window.speechSynthesis.cancel();
+        } catch (e) {
+          void e;
+        }
+      }
+    };
+  }, []);
+
   const speak = useCallback((text, priority = false) => {
-    if (!enabled || !window.speechSynthesis || !text) return;
+    if (!enabled || typeof window === 'undefined' || !window.speechSynthesis || !text) return;
 
     const now = Date.now();
     // Prevent repeating identical non-priority utterance within 4 seconds
@@ -60,8 +83,12 @@ export function useVoiceGuidance(enabled = true) {
   }, [enabled]);
 
   const stop = useCallback(() => {
-    if (window.speechSynthesis) {
-      window.speechSynthesis.cancel();
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      try {
+        window.speechSynthesis.cancel();
+      } catch (e) {
+        void e;
+      }
     }
   }, []);
 

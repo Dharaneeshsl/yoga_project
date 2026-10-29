@@ -23,6 +23,8 @@ const ScoreScreen = ({
 }) => {
   const hasData = Boolean(resultData && typeof resultData.score === 'number');
   const targetScore = hasData ? Math.min(100, Math.max(0, Math.round(resultData.score))) : 0;
+  const passThreshold = typeof resultData?.passThreshold === 'number' ? resultData.passThreshold : 60;
+  const isPassed = Boolean(resultData?.isPassed !== undefined ? resultData.isPassed : targetScore >= passThreshold);
   const [animatedScore, setAnimatedScore] = useState(0);
 
   // Animated count-up honoring prefers-reduced-motion
@@ -73,8 +75,13 @@ const ScoreScreen = ({
   }
 
   const classification = classifyScore(targetScore);
-  const isPassed = Boolean(resultData.isPassed !== undefined ? resultData.isPassed : targetScore >= 60);
   const simMap = resultData.simMap || {};
+  const isMirrored = Boolean(resultData.isMirrored);
+
+  // Choose the angle keys that were actually evaluated in this run
+  const evaluatedJointKeys = (isMirrored && levelData.mirroredAngles)
+    ? Object.keys(levelData.mirroredAngles)
+    : Object.keys(levelData.angles);
 
   return (
     <div className="score-screen-container">
@@ -82,6 +89,7 @@ const ScoreScreen = ({
         <div className="score-header">
           <span className="score-subtitle">
             {isPassed ? `Level ${levelData.id} Passed` : `Level ${levelData.id} Needs Alignment`}
+            {isMirrored && ' • Mirrored Stance'}
           </span>
           <h2 className="score-title">{levelData.name}</h2>
         </div>
@@ -108,7 +116,7 @@ const ScoreScreen = ({
             <p className="score-assessment">
               {isPassed
                 ? 'Outstanding alignment! You satisfied both the posture threshold and hold duration.'
-                : 'Good attempt! To unlock the next level, maintain average posture alignment above 60%.'}
+                : `Good attempt! To unlock the next level, maintain average posture alignment above ${passThreshold}%.`}
             </p>
           </div>
         </div>
@@ -117,7 +125,7 @@ const ScoreScreen = ({
         <div className="breakdown-section">
           <h3 className="breakdown-title">Accumulated Joint Alignment</h3>
           <div className="breakdown-grid">
-            {Object.entries(levelData.angles).map(([jointKey]) => {
+            {evaluatedJointKeys.map((jointKey) => {
               const jointData = simMap[jointKey];
               const jointHasValue = Boolean(jointData && jointData.hasValue);
               const diff = jointHasValue ? Math.round(jointData.diff) : null;

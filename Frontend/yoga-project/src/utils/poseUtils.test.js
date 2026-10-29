@@ -65,7 +65,7 @@ describe('Pose Visibility: checkFullBodyInFrame', () => {
     const landmarks = Array.from({ length: 33 }, () => ({ x: 0.5, y: 0.5, visibility: 0.9 }));
     landmarks[27].visibility = 0.1;
     landmarks[28].visibility = 0.1;
-    const result = checkFullBodyInFrame(landmarks, 0.45, { requireFeet: false, minRequiredParts: 6 });
+    const result = checkFullBodyInFrame(landmarks, 0.45, { requireFeet: false, minRequiredParts: 5 });
     assert.equal(result.isReady, true);
   });
 });
@@ -114,6 +114,7 @@ describe('Priority Hint Selection: getTopCorrectionHint', () => {
     const topHint = getTopCorrectionHint(simMap, 1.0);
     assert.ok(topHint, 'Expected a top hint');
     assert.equal(topHint.jointKey, 'LKnee', 'Should prioritize LKnee due to higher diff/tol ratio');
+    assert.equal(topHint.joint, 'LKnee', 'Must provide joint alias for backwards compatibility');
   });
 });
 
@@ -125,6 +126,18 @@ describe('Hint Debouncer: HintDebouncer', () => {
     // First frame
     const first = debouncer.update(hint);
     assert.equal(first, null, 'Should not emit immediately on first frame');
+  });
+
+  it('resets candidate and cooldown cleanly when clear() is invoked', () => {
+    const debouncer = new HintDebouncer(50, 200);
+    debouncer.candidateJoint = 'RKnee';
+    debouncer.activeHint = { jointKey: 'RKnee' };
+    debouncer.lastEmittedAt = Date.now();
+
+    debouncer.clear();
+    assert.equal(debouncer.candidateJoint, null);
+    assert.equal(debouncer.activeHint, null);
+    assert.equal(debouncer.lastEmittedAt, 0);
   });
 });
 

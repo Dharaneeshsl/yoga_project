@@ -15,10 +15,10 @@ const FinalScreen = ({
   const averageScore = completedResults.length > 0 ? Math.round(totalScore / completedResults.length) : 0;
   const classification = classifyScore(averageScore);
 
-  // Confetti effect if average score >= 65 and user does not prefer reduced motion
+  // Confetti effect if average score >= 60 and user does not prefer reduced motion
   useEffect(() => {
     const prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (prefersReducedMotion || averageScore < 65) return;
+    if (prefersReducedMotion || averageScore < 60 || completedResults.length === 0) return;
 
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -79,7 +79,7 @@ const FinalScreen = ({
       cancelAnimationFrame(animId);
       window.removeEventListener('resize', handleResize);
     };
-  }, [averageScore]);
+  }, [averageScore, completedResults.length]);
 
   // Export shareable PNG card
   const handleExportCardImage = useCallback(() => {
@@ -102,45 +102,51 @@ const FinalScreen = ({
 
     // Header
     ctx.fillStyle = '#064e3b';
-    ctx.font = 'bold 36px Inter, system-ui, sans-serif';
+    ctx.font = 'bold 34px Inter, system-ui, sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('PoseYoga Flow Achievement', 400, 80);
+    ctx.fillText('PoseYoga Flow Achievement', 400, 75);
 
-    ctx.font = '18px Inter, system-ui, sans-serif';
+    ctx.font = '16px Inter, system-ui, sans-serif';
     ctx.fillStyle = '#047857';
-    ctx.fillText('100% On-Device AI Posture Analysis', 400, 115);
+    ctx.fillText('100% On-Device AI Posture Analysis', 400, 108);
 
     // Score Circle
     ctx.beginPath();
-    ctx.arc(400, 220, 70, 0, Math.PI * 2);
+    ctx.arc(400, 210, 65, 0, Math.PI * 2);
     ctx.fillStyle = '#059669';
     ctx.fill();
 
     ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 50px Inter, system-ui, sans-serif';
-    ctx.fillText(`${averageScore}%`, 400, 235);
+    ctx.font = 'bold 46px Inter, system-ui, sans-serif';
+    ctx.fillText(`${averageScore}%`, 400, 226);
 
-    ctx.font = 'bold 22px Inter, system-ui, sans-serif';
+    ctx.font = 'bold 20px Inter, system-ui, sans-serif';
     ctx.fillStyle = '#064e3b';
-    ctx.fillText(classification.label, 400, 325);
+    ctx.fillText(classification.label, 400, 310);
 
     // Levels list
-    ctx.font = '16px Inter, system-ui, sans-serif';
-    ctx.textAlign = 'left';
-    let y = 375;
-    completedResults.slice(0, 5).forEach((r, i) => {
-      ctx.fillStyle = '#0f172a';
-      ctx.fillText(`• Level ${r.levelId || i + 1}: ${r.levelName || 'Pose'}`, 180, y);
-      ctx.fillStyle = '#059669';
-      ctx.fillText(`${r.score}%`, 600, y);
-      y += 32;
-    });
+    ctx.font = '15px Inter, system-ui, sans-serif';
+    if (completedResults.length === 0) {
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#64748b';
+      ctx.fillText('No completed levels in this session.', 400, 400);
+    } else {
+      ctx.textAlign = 'left';
+      let y = 350;
+      completedResults.slice(0, 5).forEach((r, i) => {
+        ctx.fillStyle = '#0f172a';
+        ctx.fillText(`• Level ${r.levelId || i + 1}: ${r.levelName || 'Pose'}`, 160, y);
+        ctx.fillStyle = r.isPassed ? '#059669' : '#d97706';
+        ctx.fillText(`${r.score}% (${r.isPassed ? 'Passed' : 'Needs Practice'})`, 540, y);
+        y += 32;
+      });
+    }
 
     // Date
     ctx.textAlign = 'center';
-    ctx.font = '14px Inter, system-ui, sans-serif';
+    ctx.font = '13px Inter, system-ui, sans-serif';
     ctx.fillStyle = '#64748b';
-    ctx.fillText(`Completed on ${new Date().toLocaleDateString()}`, 400, 550);
+    ctx.fillText(`Completed on ${new Date().toLocaleDateString()}`, 400, 545);
 
     const dataUrl = cardCanvas.toDataURL('image/png');
     const a = document.createElement('a');
@@ -166,12 +172,12 @@ const FinalScreen = ({
             <path d="M18 14.66V17c0 .55-.45 1-1 1h-2c-.55 0-1-.45-1-1v-2.34"></path>
             <path d="M14 6v8a2 2 0 0 1-2 2h0a2 2 0 0 1-2-2V6"></path>
           </svg>
-          <span>Practice Journey Completed!</span>
+          <span>Practice Journey Summary</span>
         </div>
 
         <h1 className="final-hero-title">Namaste, Yogi</h1>
         <p className="final-hero-desc">
-          You completed {completedResults.length} yoga pose levels. Here is your overall practice summary.
+          You completed {completedResults.length} of {levels.length} yoga pose levels. Here is your overall practice summary.
         </p>
 
         {/* Big Overall Score */}
@@ -193,8 +199,9 @@ const FinalScreen = ({
         <div className="final-levels-grid">
           {levels.map((lvl, idx) => {
             const res = results[idx];
-            const score = res?.score ?? '—';
-            const cls = typeof score === 'number' ? classifyScore(score) : null;
+            const score = res?.score;
+            const hasScore = typeof score === 'number';
+            const cls = hasScore ? classifyScore(score) : null;
 
             return (
               <div key={lvl.id} className="final-level-item">
@@ -204,7 +211,7 @@ const FinalScreen = ({
                   <h4 className="final-pose-name">{lvl.name}</h4>
                 </div>
                 <div className="final-pose-score">
-                  <span className="score-val">{typeof score === 'number' ? `${score}%` : 'Skipped'}</span>
+                  <span className="score-val">{hasScore ? `${score}%` : 'Skipped'}</span>
                   {cls && (
                     <span className="score-chip" style={{ color: cls.color }}>
                       {cls.badge}

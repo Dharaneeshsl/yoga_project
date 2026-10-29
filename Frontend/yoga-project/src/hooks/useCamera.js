@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 
+const STORAGE_KEY_CAMERA = 'poseyoga_selected_camera';
+
 export function useCamera() {
   const videoElementRef = useRef(null);
   const streamRef = useRef(null);
@@ -7,7 +9,13 @@ export function useCamera() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [devices, setDevices] = useState([]);
-  const [selectedDeviceId, setSelectedDeviceIdState] = useState('');
+  const [selectedDeviceId, setSelectedDeviceIdState] = useState(() => {
+    try {
+      return localStorage.getItem(STORAGE_KEY_CAMERA) || '';
+    } catch {
+      return '';
+    }
+  });
 
   // Enumerate video devices with populated labels
   const refreshDevices = useCallback(async () => {
@@ -17,7 +25,12 @@ export function useCamera() {
       const videoInputs = allDevices.filter(d => d.kind === 'videoinput');
       setDevices(videoInputs);
       if (videoInputs.length > 0) {
-        setSelectedDeviceIdState(prev => prev || videoInputs[0].deviceId);
+        setSelectedDeviceIdState(prev => {
+          if (prev && videoInputs.some(d => d.deviceId === prev)) {
+            return prev;
+          }
+          return videoInputs[0].deviceId;
+        });
       }
     } catch (err) {
       console.warn('Failed to enumerate devices:', err);
@@ -36,15 +49,22 @@ export function useCamera() {
       streamRef.current = null;
     }
     if (videoElementRef.current) {
-      videoElementRef.current.srcObject = null;
+      try {
+        videoElementRef.current.srcObject = null;
+      } catch (e) {
+        void e;
+      }
     }
     setIsActive(false);
     setIsLoading(false);
   }, []);
 
-  // Safely play video element with timeout guard
+  // Safely play video element with timeout guard and explicit mobile autoplay flags
   const bindStreamToVideo = useCallback(async (videoEl, stream) => {
     if (!videoEl || !stream) return;
+
+    videoEl.muted = true;
+    videoEl.playsInline = true;
     videoEl.srcObject = stream;
 
     if (videoEl.readyState >= 1 && videoEl.videoWidth > 0) {
@@ -86,7 +106,7 @@ export function useCamera() {
     if (!navigator.mediaDevices?.getUserMedia) {
       setError({
         type: 'UNSUPPORTED',
-        message: 'Camera API is not supported in this browser or context (HTTPS required).'
+        message: 'Camera API is not supported in this browser or context (HTTPS or localhost is required).'
       });
       return false;
     }
@@ -121,6 +141,11 @@ export function useCamera() {
         if (targetDevice && (firstErr.name === 'OverconstrainedError' || firstErr.name === 'NotFoundError')) {
           console.warn('Target camera device unavailable, falling back to facingMode: user:', firstErr);
           setSelectedDeviceIdState('');
+          try {
+            localStorage.removeItem(STORAGE_KEY_CAMERA);
+          } catch (e) {
+            void e;
+          }
           const fallbackConstraints = {
             audio: false,
             video: {
@@ -136,6 +161,19 @@ export function useCamera() {
       }
 
       streamRef.current = stream;
+
+      // Attach disconnection listener to handle physically interrupted/unplugged cameras
+      const videoTrack = stream.getVideoTracks()[0];
+      if (videoTrack) {
+        videoTrack.onended = () => {
+          console.warn('Camera video track ended unexpectedly (unplugged or revoked)');
+          setIsActive(false);
+          setError({
+            type: 'DISCONNECTED',
+            message: 'Camera connection was lost. Please reconnect your webcam and click Try Again.'
+          });
+        };
+      }
 
       if (videoElementRef.current) {
         await bindStreamToVideo(videoElementRef.current, stream);
@@ -160,6 +198,9 @@ export function useCamera() {
       } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
         errorType = 'IN_USE';
         message = 'Your camera is currently in use by another application.';
+      } else if (err.name === 'OverconstrainedError') {
+        errorType = 'OVERCONSTRAINED';
+        message = 'The requested camera device or resolution is not supported.';
       }
 
       setError({ type: errorType, message });
@@ -169,9 +210,19 @@ export function useCamera() {
     }
   }, [selectedDeviceId, bindStreamToVideo, refreshDevices]);
 
-  // Set device and auto-restart if active
+  // Set device with auto-restart and localStorage persistence
   const setSelectedDeviceId = useCallback((deviceId) => {
     setSelectedDeviceIdState(deviceId);
+    try {
+      if (deviceId) {
+        localStorage.setItem(STORAGE_KEY_CAMERA, deviceId);
+      } else {
+        localStorage.removeItem(STORAGE_KEY_CAMERA);
+      }
+    } catch (e) {
+      console.warn('Failed to persist camera selection:', e);
+    }
+
     if (streamRef.current) {
       startCamera(deviceId);
     }
@@ -195,9 +246,28 @@ export function useCamera() {
     }
   }, []);
 
-  // Clean up stream tracks on component unmount
+  // Listen for device changes (cameras plugged in or unplugged)
   useEffect(() => {
+    const handleDeviceChange = () => {
+      refreshDevices();
+    };
+    navigator.mediaDevices?.addEventListener?.('devicechange', handleDeviceChange);
     return () => {
+      navigator.mediaDevices?.removeEventListener?.('devicechange', handleDeviceChange);
+    };
+  }, [refreshDevices]);
+
+  // Stop camera tracks on window unload or component unmount
+  useEffect(() => {
+    const handleUnload = () => {
+      stopCamera();
+    };
+    window.addEventListener('beforeunload', handleUnload);
+    window.addEventListener('pagehide', handleUnload);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleUnload);
+      window.removeEventListener('pagehide', handleUnload);
       stopCamera();
     };
   }, [stopCamera]);
