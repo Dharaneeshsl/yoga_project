@@ -96,7 +96,7 @@ export function useHoldTimer({
     // Fraction of total active hold session spent maintaining required pose
     const inPoseTime = holdElapsedRef.current;
     const totalTime = Math.max(inPoseTime, totalHoldAttemptTimeRef.current);
-    const poseFraction = totalTime > 0 ? Math.min(1, inPoseTime / totalTime) : 1.0;
+    const poseFraction = totalTime > 0 ? Math.min(1, inPoseTime / totalTime) : 0;
 
     // Calculate score = average similarity × fraction of hold time in pose
     const samples = similaritySamplesRef.current;
@@ -122,14 +122,17 @@ export function useHoldTimer({
       };
     }
 
+    const isTimedOut = totalHoldAttemptTimeRef.current >= targetDurationRef.current * 3 && inPoseTime < targetDurationRef.current;
+
     const summary = {
       score,
-      holdElapsed: targetDurationRef.current,
+      holdElapsed: Math.min(targetDurationRef.current, Math.round(inPoseTime * 10) / 10),
       totalAttemptSeconds: Math.round(totalTime * 10) / 10,
       poseFraction: Math.round(poseFraction * 100) / 100,
       simMap: accumulatedSimMap,
       isMirrored: lastIsMirroredRef.current,
-      isPassed
+      isPassed,
+      isTimedOut
     };
 
     completedPayloadRef.current = summary;
@@ -159,6 +162,13 @@ export function useHoldTimer({
       if (deltaSeconds > 0 && deltaSeconds < 1.0) {
         // Track total wall time in holding phase
         totalHoldAttemptTimeRef.current += deltaSeconds;
+
+        // Auto-fail timeout guard: if user struggles and exceeds 3x target duration without completing hold
+        const maxHoldAttemptTimeout = targetDurationRef.current * 3;
+        if (totalHoldAttemptTimeRef.current >= maxHoldAttemptTimeout && holdElapsedRef.current < targetDurationRef.current) {
+          finishRun();
+          return;
+        }
 
         // Advance hold elapsed time ONLY when user is actively in pose and framed
         if (isCurrentlyInPoseRef.current) {

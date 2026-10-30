@@ -98,16 +98,17 @@ export function mapLandmarks(landmarks, width = 640, height = 480, minVisibility
 
 /**
  * Validates that user's full body (head, shoulders, hips, knees, ankles) is visible.
+ * Intelligent floor-pose relaxation prevents blocking Begin on Downward Dog and Cobra.
  */
 export function checkFullBodyInFrame(landmarks, minVisibility = 0.45, options = {}) {
-  const { requireFeet = true, minRequiredParts = 7 } = options;
+  const { requireFeet = true, minRequiredParts = 7, isFloorPose = false } = options;
 
   if (!landmarks || landmarks.length === 0) {
     return {
       isReady: false,
       message: "No person detected. Please step into the camera view.",
       visibleCount: 0,
-      totalRequired: 8,
+      totalRequired: isFloorPose ? 2 : 8,
       missingParts: ['Body']
     };
   }
@@ -142,8 +143,23 @@ export function checkFullBodyInFrame(landmarks, minVisibility = 0.45, options = 
     }
   }
 
+  // Floor and inverted poses (Downward Dog, Cobra) have prone/inverted angles where
+  // lower limbs are frequently occluded against the mat or foreshortened. Relax gate to prevent blocking Begin.
+  if (isFloorPose) {
+    const floorThreshold = Math.min(2, minRequiredParts);
+    const isReady = visibleCount >= floorThreshold;
+    return {
+      isReady,
+      message: isReady
+        ? "Floor pose ready! Position yourself on your mat."
+        : "Please position yourself on your mat within camera view.",
+      visibleCount,
+      totalRequired: floorThreshold,
+      missingParts: isReady ? [] : missingParts
+    };
+  }
+
   const hasFeet = !missingParts.includes('Feet / Ankles');
-  // For ground or inverted poses (Cobra, Downward Dog), feet requirement can be relaxed
   const feetSatisfied = requireFeet ? hasFeet : true;
   const threshold = Math.min(minRequiredParts, checkKeys.length);
   const isReady = visibleCount >= threshold && feetSatisfied;
@@ -159,7 +175,7 @@ export function checkFullBodyInFrame(landmarks, minVisibility = 0.45, options = 
     }
   }
 
-  return { isReady, message, visibleCount, totalRequired: checkKeys.length, missingParts };
+  return { isReady, message, visibleCount, totalRequired: threshold, missingParts };
 }
 
 /**
@@ -334,8 +350,32 @@ export function classifyScore(percent) {
 /**
  * Renders an optimized skeleton overlay with color-coded joints.
  * Only draws major body landmarks and lines.
+ * Robustly accepts either:
+ * - drawPoseSkeleton(canvas/ctx, landmarks, simMap, width, height, mirror)
+ * - drawPoseSkeleton(canvas/ctx, landmarks, width, height, simMap, mirror)
  */
-export function drawPoseSkeleton(ctx, landmarks, simMap = {}, width = 640, height = 480, mirror = true) {
+export function drawPoseSkeleton(target, landmarks, ...rest) {
+  if (!target) return;
+  const ctx = target.getContext ? target.getContext('2d') : target;
+  if (!ctx || !ctx.save) return;
+
+  let simMap = {};
+  let width = 640;
+  let height = 480;
+  let mirror = true;
+
+  if (typeof rest[0] === 'object' && rest[0] !== null) {
+    simMap = rest[0];
+    width = typeof rest[1] === 'number' ? rest[1] : 640;
+    height = typeof rest[2] === 'number' ? rest[2] : 480;
+    mirror = rest[3] !== undefined ? Boolean(rest[3]) : true;
+  } else if (typeof rest[0] === 'number') {
+    width = rest[0];
+    height = typeof rest[1] === 'number' ? rest[1] : 480;
+    simMap = typeof rest[2] === 'object' && rest[2] !== null ? rest[2] : {};
+    mirror = rest[3] !== undefined ? Boolean(rest[3]) : true;
+  }
+
   ctx.save();
   ctx.clearRect(0, 0, width, height);
 
@@ -359,7 +399,7 @@ export function drawPoseSkeleton(ctx, landmarks, simMap = {}, width = 640, heigh
     if (!lm1 || !lm2) continue;
     const vis1 = lm1.visibility !== undefined ? lm1.visibility : 1;
     const vis2 = lm2.visibility !== undefined ? lm2.visibility : 1;
-    if (vis1 < 0.4 || vis2 < 0.4) continue;
+    if (vis1 < 0.35 || vis2 < 0.35) continue;
 
     const x1 = lm1.x * width;
     const y1 = lm1.y * height;
@@ -391,7 +431,7 @@ export function drawPoseSkeleton(ctx, landmarks, simMap = {}, width = 640, heigh
     const lm = landmarks[lmIdx];
     if (!lm) continue;
     const vis = lm.visibility !== undefined ? lm.visibility : 1;
-    if (vis < 0.4) continue;
+    if (vis < 0.35) continue;
 
     const x = lm.x * width;
     const y = lm.y * height;

@@ -6,17 +6,35 @@ PoseYoga is a modern web application built with React and Vite that provides int
 
 ---
 
+## 🌐 Live Demo & Deployment
+
+- **Live URL**: [https://poseyoga.vercel.app](https://poseyoga.vercel.app) *(Replace with your deployed production URL)*
+- **Instant Demo Mode**: [https://poseyoga.vercel.app/?unlock=all](https://poseyoga.vercel.app/?unlock=all) *(Unlocks all 5 levels for live presentations)*
+- **Webcam Calibration HUD**: [https://poseyoga.vercel.app/?debug=1](https://poseyoga.vercel.app/?debug=1) *(Displays live angles and tolerances)*
+
+---
+
+## 📸 Screenshots
+
+| Practice Viewport & 60fps Skeleton | Real-Time Feedback & Guidance | Session Performance & Summary |
+| :---: | :---: | :---: |
+| ![Live Practice](Frontend/yoga-project/public/poses/tree.svg) | ![Feedback HUD](Frontend/yoga-project/public/poses/warrior2.svg) | ![Session Summary](Frontend/yoga-project/public/poses/downward_dog.svg) |
+| *Aspect-ratio corrected skeleton overlay* | *Real-time hints and directional guidance* | *Continuous hold scoring and breakdown* |
+
+---
+
 ## ✨ Features
 
 - **On-Device Vision AI**: Powered by `@mediapipe/tasks-vision` running WebAssembly locally.
 - **Aspect-Corrected Geometry**: Computes precise Euclidean joint angles in screen space, avoiding normalized aspect-ratio distortion.
 - **Mirrored Side Detection**: Poses like Tree Pose and Warrior II automatically detect and score whichever leg or arm side you perform.
-- **Pre-Flight Full Body Check**: Verifies that your full silhouette (head, shoulders, hips, knees, and ankles) is in view before timing begins, with intelligent feet-rule relaxation for floor poses (Cobra, Downward Dog).
+- **Pre-Flight Full Body Check**: Verifies that your full silhouette (head, shoulders, hips, knees, and ankles) is in view before timing begins, with intelligent relaxed framing for floor poses (Cobra, Downward Dog) so the Begin button is never blocked.
 - **Hold Continuity Scoring**: Final score factors both posture alignment and hold consistency (`average similarity × fraction of hold time in pose`). Excessive wobbling or breaking posture lowers the final score and correctly triggers "Try Again".
+- **Hold-Phase Timeout Guard**: Automatically concludes and scores attempts after $3\times$ the target duration if posture cannot be maintained, preventing infinite hold hangs.
 - **Zero Latency Pose Status**: High-frequency frame callbacks feed the hold timer at native camera frame rates, avoiding 200ms throttle stutter.
 - **Accurate Directional Feedback**: Natural language cues pointing in the correct anatomical direction (e.g., "Bend your front knee deeper", "Raise your left arm higher"), prioritized by relative error (`diff / tolerance`).
-- **Non-Repeating Voice Guidance**: Speaks guidance once per unique alignment error, eliminating repetitive chatter while maintaining steady cues.
-- **Self-Hosted Vector Illustrations**: High-resolution, offline SVG illustrations for every pose—no external third-party hotlinking or copyright risks.
+- **Non-Repeating Voice Guidance**: Speaks guidance once per unique alignment error, eliminating repetitive chatter while resetting when posture is corrected.
+- **Self-Hosted Vector Illustrations & Icons**: High-resolution, offline SVG illustrations for every pose and full PWA icons (192px and 512px).
 - **Progressive Curriculum & Persistence**: 5 curated poses with level gating, personal best tracking, and practice history stored locally in `localStorage`.
 - **Accessible & Responsive**: High-contrast color tokens, keyboard navigation, visible focus indicators, and mobile-friendly layouts.
 
@@ -26,17 +44,24 @@ PoseYoga is a modern web application built with React and Vite that provides int
 
 ```text
 yoga-project/
+├── .github/
+│   └── workflows/
+│       └── ci.yml                  # GitHub Actions CI workflow (npm ci, lint, test, build)
 ├── .gitignore                      # Root gitignore excluding dependencies and secrets
 ├── README.md                       # Repository documentation
-├── netlify.toml                    # Netlify deployment configuration
-├── vercel.json                     # Vercel deployment configuration
+├── netlify.toml                    # Netlify deployment configuration (base: Frontend/yoga-project)
 └── Frontend/
     └── yoga-project/               # Core React application (Vite)
         ├── public/
+        │   ├── icon-192.png        # PWA install icon (192x192)
+        │   ├── icon-512.png        # PWA install icon (512x512)
+        │   ├── favicon.svg         # Modern vector favicon
+        │   ├── manifest.webmanifest# PWA web manifest
         │   ├── models/             # MediaPipe task models (cached for offline use)
         │   ├── poses/              # Self-hosted SVG pose illustrations
         │   └── wasm/               # Self-hosted MediaPipe WebAssembly binaries
         ├── scripts/
+        │   ├── generate-icons.js   # Pure Node PNG icon generator
         │   └── setup-mediapipe.js  # Asset copying and model download postinstall script
         ├── src/
         │   ├── components/         # Clean React UI components
@@ -49,7 +74,7 @@ yoga-project/
         │   │   └── levels.js       # Target angles, tolerances, tips & benefits
         │   ├── hooks/              # Custom modular lifecycle hooks
         │   │   ├── useCamera.js    # Camera stream lifecycle & permission errors
-        │   │   ├── useHoldTimer.js # Continuous hold timer with continuity tracking
+        │   │   ├── useHoldTimer.js # Continuous hold timer with continuity tracking & timeout
         │   │   ├── usePoseLandmarker.js # MediaPipe pose detection pipeline
         │   │   └── useVoiceGuidance.js  # Web Speech synthesis
         │   ├── utils/
@@ -64,6 +89,7 @@ yoga-project/
         │   └── main.jsx            # React root mount
         ├── .env.example            # Environment configuration template
         ├── eslint.config.js        # Modern ESLint configuration
+        ├── package-lock.json       # Strict dependency lockfile for npm ci
         ├── package.json            # Scripts and dependencies
         ├── vercel.json             # Sub-directory Vercel rewrite configuration
         └── vite.config.js          # Vite build configuration
@@ -104,37 +130,13 @@ Open your browser to `http://localhost:5173`.
 npm run build
 ```
 
-This generates an optimized production bundle inside `Frontend/yoga-project/dist/`.
-
-To test the production build locally:
-
-```bash
-npm run preview
-```
-
----
-
-## 🌐 1-Click Deployment (Vercel & Netlify)
-
-Because webcam access requires HTTPS, deploying to a hosted URL is recommended for mobile and multi-device testing.
-
-### Option 1: Vercel
-- Root Directory: `Frontend/yoga-project`
-- Build Command: `npm install && npm run build`
-- Output Directory: `dist`
-- *(Pre-configured [`vercel.json`](file:///d:/yoga%20project/yoga-project/vercel.json) files are provided at root and in `Frontend/yoga-project`)*
-
-### Option 2: Netlify
-- Base Directory: `Frontend/yoga-project`
-- Build Command: `npm install && npm run build`
-- Publish Directory: `dist`
-- *(Pre-configured [`netlify.toml`](file:///d:/yoga%20project/yoga-project/netlify.toml) is included in the project root)*
+The compiled SPA bundle will be generated in `Frontend/yoga-project/dist/`.
 
 ---
 
 ## 🧪 Testing & Code Quality
 
-Run the unit test suite covering 2D angle geometry, visibility checks, hint direction logic, real storage parsers, hold continuity penalties, and continuous hold progression:
+Run all test suites (using Node.js built-in native test runner `node --test`):
 
 ```bash
 npm run test

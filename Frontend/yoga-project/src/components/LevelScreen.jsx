@@ -100,10 +100,12 @@ const LevelScreen = ({
   // Level-aware body framing check (relaxed threshold for floor poses like Cobra and Downward Dog)
   const bodyCheck = useMemo(() => {
     const isFloor = Boolean(levelData.isFloorPose);
-    const minParts = isFloor ? 4 : (levelData.viewOrientation === 'front' ? 7 : 6);
-    return checkFullBodyInFrame(landmarks, 0.45, {
+    const minParts = isFloor ? 2 : (levelData.viewOrientation === 'front' ? 7 : 6);
+    const minVis = isFloor ? 0.3 : 0.45;
+    return checkFullBodyInFrame(landmarks, minVis, {
       requireFeet: !isFloor,
-      minRequiredParts: minParts
+      minRequiredParts: minParts,
+      isFloorPose: isFloor
     });
   }, [landmarks, levelData.isFloorPose, levelData.viewOrientation]);
 
@@ -153,13 +155,6 @@ const LevelScreen = ({
 
   const liveSimilarityPct = Math.round(simResult.overall * 100);
 
-  // Sync hold status for state changes (e.g. initial render)
-  useEffect(() => {
-    if (phase === 'holding') {
-      updatePoseStatus(simResult.overall, bodyCheck.isReady, simResult.map, simResult.isMirrored);
-    }
-  }, [simResult.overall, simResult.map, simResult.isMirrored, bodyCheck.isReady, phase, updatePoseStatus]);
-
   // Handle corrective hints debouncing: speaks once per unique instruction, does not repeat while error persists
   useEffect(() => {
     if (phase === 'holding') {
@@ -183,30 +178,29 @@ const LevelScreen = ({
     }
   }, [simResult.map, phase, settings.voiceEnabled, voice]);
 
-  // Voice & audio cues during phase transitions (fires exactly once per transition)
+  // Countdown Audio Cues & Phase Transition Announcements
   useEffect(() => {
     if (phase === 'countdown') {
-      hasAnnouncedHoldRef.current = false;
-      hasAnnouncedCompleteRef.current = false;
       if (countdownRemaining > 0) {
+        playCountdownTick();
         if (settings.voiceEnabled) {
-          playCountdownTick();
-          voice.speak(String(countdownRemaining), true);
+          voice.speak(String(countdownRemaining));
         }
       }
     } else if (phase === 'holding') {
       if (!hasAnnouncedHoldRef.current) {
         hasAnnouncedHoldRef.current = true;
+        playSuccessChime();
         if (settings.voiceEnabled) {
-          voice.speak('Hold the pose now!', true);
+          voice.speak("Hold the pose");
         }
       }
     } else if (phase === 'completed') {
       if (!hasAnnouncedCompleteRef.current) {
         hasAnnouncedCompleteRef.current = true;
+        playSuccessChime();
         if (settings.voiceEnabled) {
-          playSuccessChime();
-          voice.speak('Pose complete! Great work!', true);
+          voice.speak("Level complete! Well done.");
         }
       }
     } else {
@@ -217,8 +211,26 @@ const LevelScreen = ({
 
   // High-FPS Direct Canvas Drawing & Real-Time Pose Status (Subscribes directly to PoseLandmarker frame pipeline)
   useEffect(() => {
-    setOnFrameCallback(({ landmarks, angles, videoWidth, videoHeight }) => {
-      // 1. Direct 60fps canvas skeleton rendering
+    setOnFrameCallback(({ landmarks: frameLandmarks, angles, videoWidth, videoHeight }) => {
+      const isFloor = Boolean(levelDataRef.current.isFloorPose);
+      const minParts = isFloor ? 2 : (levelDataRef.current.viewOrientation === 'front' ? 7 : 6);
+      const minVis = isFloor ? 0.3 : 0.45;
+      const frameCheck = checkFullBodyInFrame(frameLandmarks, minVis, {
+        requireFeet: !isFloor,
+        minRequiredParts: minParts,
+        isFloorPose: isFloor
+      });
+
+      let frameSim = { overall: 0, map: {}, isMirrored: false };
+      if (angles && Object.keys(angles).length > 0) {
+        frameSim = computePoseSimilarity(
+          angles,
+          levelDataRef.current,
+          diffMultiplierRef.current
+        );
+      }
+
+      // 1. Direct 60fps canvas skeleton rendering with real-time frameSim map
       const canvas = canvasRef.current;
       if (canvas) {
         if (canvas.width !== videoWidth || canvas.height !== videoHeight) {
@@ -229,8 +241,8 @@ const LevelScreen = ({
         const ctx = canvas.getContext('2d');
         drawPoseSkeleton(
           ctx,
-          landmarks,
-          simResult.map,
+          frameLandmarks,
+          frameSim.map,
           videoWidth,
           videoHeight,
           settings.mirrorView !== false
@@ -238,19 +250,7 @@ const LevelScreen = ({
       }
 
       // 2. High-frequency pose status update on every camera frame (removes 200ms throttle lag from hold timer)
-      if (phaseRef.current === 'holding' && angles && Object.keys(angles).length > 0) {
-        const frameSim = computePoseSimilarity(
-          angles,
-          levelDataRef.current,
-          diffMultiplierRef.current
-        );
-        const isFloor = Boolean(levelDataRef.current.isFloorPose);
-        const minParts = isFloor ? 4 : (levelDataRef.current.viewOrientation === 'front' ? 7 : 6);
-        const frameCheck = checkFullBodyInFrame(landmarks, 0.45, {
-          requireFeet: !isFloor,
-          minRequiredParts: minParts
-        });
-
+      if (phaseRef.current === 'holding') {
         updatePoseStatusRef.current(frameSim.overall, frameCheck.isReady, frameSim.map, frameSim.isMirrored);
       }
     });
@@ -258,7 +258,7 @@ const LevelScreen = ({
     return () => {
       setOnFrameCallback(null);
     };
-  }, [simResult.map, settings.mirrorView, setOnFrameCallback]);
+  }, [settings.mirrorView, setOnFrameCallback]);
 
   // SVG circular progress calculation
   const circleRadius = 38;

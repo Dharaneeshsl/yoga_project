@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import {
   angleBetween2D,
   checkFullBodyInFrame,
-  classifyScore
+  classifyScore,
+  drawPoseSkeleton
 } from './poseUtils.js';
 import {
   generateJointInstruction,
@@ -29,8 +30,8 @@ describe('Pose Math: angleBetween2D', () => {
   });
 
   it('handles zero length or invalid points gracefully', () => {
-    assert.equal(angleBetween2D(null, null, null), null);
-    assert.equal(angleBetween2D({ x: 0, y: 0 }, { x: 0, y: 0 }, { x: 5, y: 5 }), null);
+    assert.equal(angleBetween2D(null, { x: 0, y: 0 }, { x: 1, y: 1 }), null);
+    assert.equal(angleBetween2D({ x: 0, y: 0 }, { x: 0, y: 0 }, { x: 1, y: 1 }), null);
   });
 });
 
@@ -67,6 +68,23 @@ describe('Pose Visibility: checkFullBodyInFrame', () => {
     landmarks[28].visibility = 0.1;
     const result = checkFullBodyInFrame(landmarks, 0.45, { requireFeet: false, minRequiredParts: 5 });
     assert.equal(result.isReady, true);
+  });
+
+  it('guarantees floor poses (Downward Dog, Cobra) are not blocked when user is on mat', () => {
+    // Only head and shoulders visible on mat (prone posture)
+    const landmarks = Array.from({ length: 33 }, () => ({ x: 0.5, y: 0.5, visibility: 0.1 }));
+    landmarks[0].visibility = 0.8; // nose
+    landmarks[11].visibility = 0.8; // left shoulder
+    landmarks[12].visibility = 0.8; // right shoulder
+    const result = checkFullBodyInFrame(landmarks, 0.3, { isFloorPose: true, requireFeet: false });
+    assert.equal(result.isReady, true);
+    assert.ok(result.message.includes('Floor pose ready'));
+  });
+
+  it('reports isReady=false for floor poses when no person is in camera view', () => {
+    const result = checkFullBodyInFrame([], 0.3, { isFloorPose: true });
+    assert.equal(result.isReady, false);
+    assert.ok(result.message.includes('No person detected'));
   });
 });
 
@@ -147,5 +165,40 @@ describe('Score Classification: classifyScore', () => {
     assert.ok(cls.label.includes('Masterful'));
     assert.ok(cls.text, 'Has explicit text color');
     assert.ok(cls.bg, 'Has explicit background color');
+  });
+});
+
+describe('Skeleton Overlay: drawPoseSkeleton', () => {
+  it('gracefully handles canvas mock and flexible argument signatures', () => {
+    const mockCtx = {
+      save: () => {},
+      restore: () => {},
+      clearRect: () => {},
+      translate: () => {},
+      scale: () => {},
+      beginPath: () => {},
+      moveTo: () => {},
+      lineTo: () => {},
+      stroke: () => {},
+      arc: () => {},
+      fill: () => {}
+    };
+
+    const landmarks = Array.from({ length: 33 }, () => ({ x: 0.5, y: 0.5, visibility: 0.9 }));
+
+    // Signature A: (ctx, landmarks, simMap, width, height, mirror)
+    assert.doesNotThrow(() => {
+      drawPoseSkeleton(mockCtx, landmarks, {}, 640, 480, true);
+    });
+
+    // Signature B: (ctx, landmarks, width, height, simMap, mirror)
+    assert.doesNotThrow(() => {
+      drawPoseSkeleton(mockCtx, landmarks, 640, 480, {}, true);
+    });
+
+    // Empty landmarks
+    assert.doesNotThrow(() => {
+      drawPoseSkeleton(mockCtx, [], {}, 640, 480, true);
+    });
   });
 });

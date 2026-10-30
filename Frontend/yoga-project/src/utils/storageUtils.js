@@ -55,24 +55,32 @@ export function computeHoldScore(samples = [], passScoreThreshold = 60, poseFrac
 }
 
 /**
- * Pure simulation tick for continuous hold progression.
+ * Pure simulation tick for continuous hold progression and timeout detection.
  */
 export function calculateHoldProgress({
   currentElapsed,
   deltaSeconds,
   inPose,
   targetDuration = 30,
-  tabHidden = false
+  tabHidden = false,
+  totalAttemptTime = 0,
+  maxTimeoutMultiplier = 3
 }) {
+  const timeoutLimit = targetDuration * maxTimeoutMultiplier;
+  const isTimedOut = totalAttemptTime >= timeoutLimit;
+
   if (tabHidden || !inPose) {
     return {
       elapsed: currentElapsed,
-      isCompleted: currentElapsed >= targetDuration
+      isCompleted: currentElapsed >= targetDuration || isTimedOut,
+      isTimedOut
     };
   }
+
   const nextElapsed = Math.min(targetDuration, currentElapsed + Math.max(0, deltaSeconds));
   return {
     elapsed: nextElapsed,
-    isCompleted: nextElapsed >= targetDuration
+    isCompleted: nextElapsed >= targetDuration || isTimedOut,
+    isTimedOut
   };
 }
