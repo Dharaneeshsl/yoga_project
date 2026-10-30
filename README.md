@@ -12,10 +12,10 @@ PoseYoga is a modern web application built with React and Vite that provides int
 - **Aspect-Corrected Geometry**: Computes precise Euclidean joint angles in screen space, avoiding normalized aspect-ratio distortion.
 - **Mirrored Side Detection**: Poses like Tree Pose and Warrior II automatically detect and score whichever leg or arm side you perform.
 - **Pre-Flight Full Body Check**: Verifies that your full silhouette (head, shoulders, hips, knees, and ankles) is in view before timing begins, with intelligent feet-rule relaxation for floor poses (Cobra, Downward Dog).
-- **Continuous Hold Verification**: Hold timer only advances when you actively maintain the posture above the similarity threshold.
+- **Hold Continuity Scoring**: Final score factors both posture alignment and hold consistency (`average similarity × fraction of hold time in pose`). Excessive wobbling or breaking posture lowers the final score and correctly triggers "Try Again".
+- **Zero Latency Pose Status**: High-frequency frame callbacks feed the hold timer at native camera frame rates, avoiding 200ms throttle stutter.
 - **Accurate Directional Feedback**: Natural language cues pointing in the correct anatomical direction (e.g., "Bend your front knee deeper", "Raise your left arm higher"), prioritized by relative error (`diff / tolerance`).
-- **Zero Flickering Guidance**: Debounced hints require errors to persist before alerting, avoiding single-frame jitter.
-- **Voice Guidance**: Real-time spoken countdowns, encouragement, and posture reminders via the Web Speech API.
+- **Non-Repeating Voice Guidance**: Speaks guidance once per unique alignment error, eliminating repetitive chatter while maintaining steady cues.
 - **Self-Hosted Vector Illustrations**: High-resolution, offline SVG illustrations for every pose—no external third-party hotlinking or copyright risks.
 - **Progressive Curriculum & Persistence**: 5 curated poses with level gating, personal best tracking, and practice history stored locally in `localStorage`.
 - **Accessible & Responsive**: High-contrast color tokens, keyboard navigation, visible focus indicators, and mobile-friendly layouts.
@@ -28,6 +28,8 @@ PoseYoga is a modern web application built with React and Vite that provides int
 yoga-project/
 ├── .gitignore                      # Root gitignore excluding dependencies and secrets
 ├── README.md                       # Repository documentation
+├── netlify.toml                    # Netlify deployment configuration
+├── vercel.json                     # Vercel deployment configuration
 └── Frontend/
     └── yoga-project/               # Core React application (Vite)
         ├── public/
@@ -47,7 +49,7 @@ yoga-project/
         │   │   └── levels.js       # Target angles, tolerances, tips & benefits
         │   ├── hooks/              # Custom modular lifecycle hooks
         │   │   ├── useCamera.js    # Camera stream lifecycle & permission errors
-        │   │   ├── useHoldTimer.js # Continuous hold timer with tab pause
+        │   │   ├── useHoldTimer.js # Continuous hold timer with continuity tracking
         │   │   ├── usePoseLandmarker.js # MediaPipe pose detection pipeline
         │   │   └── useVoiceGuidance.js  # Web Speech synthesis
         │   ├── utils/
@@ -63,6 +65,7 @@ yoga-project/
         ├── .env.example            # Environment configuration template
         ├── eslint.config.js        # Modern ESLint configuration
         ├── package.json            # Scripts and dependencies
+        ├── vercel.json             # Sub-directory Vercel rewrite configuration
         └── vite.config.js          # Vite build configuration
 ```
 
@@ -111,9 +114,27 @@ npm run preview
 
 ---
 
+## 🌐 1-Click Deployment (Vercel & Netlify)
+
+Because webcam access requires HTTPS, deploying to a hosted URL is recommended for mobile and multi-device testing.
+
+### Option 1: Vercel
+- Root Directory: `Frontend/yoga-project`
+- Build Command: `npm install && npm run build`
+- Output Directory: `dist`
+- *(Pre-configured [`vercel.json`](file:///d:/yoga%20project/yoga-project/vercel.json) files are provided at root and in `Frontend/yoga-project`)*
+
+### Option 2: Netlify
+- Base Directory: `Frontend/yoga-project`
+- Build Command: `npm install && npm run build`
+- Publish Directory: `dist`
+- *(Pre-configured [`netlify.toml`](file:///d:/yoga%20project/yoga-project/netlify.toml) is included in the project root)*
+
+---
+
 ## 🧪 Testing & Code Quality
 
-Run the unit test suite covering 2D angle geometry, visibility checks, hint direction logic, real storage parsers, and continuous hold progression:
+Run the unit test suite covering 2D angle geometry, visibility checks, hint direction logic, real storage parsers, hold continuity penalties, and continuous hold progression:
 
 ```bash
 npm run test
@@ -137,7 +158,7 @@ npm run lint
 ## 🔒 Privacy & Permissions
 
 - **100% Local Inference**: Video frames are captured directly by your browser and processed in-memory using WebAssembly and WebGL. No image or video stream is ever transmitted over the network or saved to any server.
-- **HTTPS Requirement**: Modern browsers require an encrypted context (`https://` or `localhost`) to grant webcam access. When deploying to production (e.g., Vercel, Netlify, Cloudflare Pages), ensure HTTPS is enabled.
+- **HTTPS Requirement**: Modern browsers require an encrypted context (`https://` or `localhost`) to grant webcam access.
 
 ---
 

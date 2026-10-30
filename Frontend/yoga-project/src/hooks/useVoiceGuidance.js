@@ -50,8 +50,8 @@ export function useVoiceGuidance(enabled = true) {
     if (!enabled || typeof window === 'undefined' || !window.speechSynthesis || !text) return;
 
     const now = Date.now();
-    // Prevent repeating identical non-priority utterance within 4 seconds
-    if (!priority && text === lastSpokenTextRef.current && now - lastSpokenTimeRef.current < 4000) {
+    // Say an instruction once; do not repeat while the error persists until the instruction changes
+    if (!priority && text === lastSpokenTextRef.current) {
       return;
     }
 
@@ -83,6 +83,7 @@ export function useVoiceGuidance(enabled = true) {
   }, [enabled]);
 
   const stop = useCallback(() => {
+    lastSpokenTextRef.current = '';
     if (typeof window !== 'undefined' && window.speechSynthesis) {
       try {
         window.speechSynthesis.cancel();

@@ -142,14 +142,14 @@ export const LEVELS = [
       RKnee: 175
     },
     tolerances: {
-      LShoulder: 20,
-      RShoulder: 20,
-      LElbow: 20,
-      RElbow: 20,
+      LShoulder: 22,
+      RShoulder: 22,
+      LElbow: 22,
+      RElbow: 22,
       LHip: 25,
       RHip: 25,
-      LKnee: 20,
-      RKnee: 20
+      LKnee: 22,
+      RKnee: 22
     },
     weights: {
       LShoulder: 1.1,
@@ -223,14 +223,14 @@ export const LEVELS = [
       RKnee: 172
     },
     tolerances: {
-      LShoulder: 25,
-      RShoulder: 25,
-      LElbow: 22,
-      RElbow: 22,
-      LHip: 25,
-      RHip: 25,
-      LKnee: 22,
-      RKnee: 22
+      LShoulder: 30,
+      RShoulder: 30,
+      LElbow: 25,
+      RElbow: 25,
+      LHip: 30,
+      RHip: 30,
+      LKnee: 25,
+      RKnee: 25
     },
     weights: {
       LShoulder: 1.2,
@@ -380,14 +380,14 @@ export const LEVELS = [
       RKnee: 175
     },
     tolerances: {
-      LShoulder: 25,
-      RShoulder: 25,
-      LElbow: 30,
-      RElbow: 30,
-      LHip: 25,
-      RHip: 25,
-      LKnee: 20,
-      RKnee: 20
+      LShoulder: 30,
+      RShoulder: 30,
+      LElbow: 35,
+      RElbow: 35,
+      LHip: 30,
+      RHip: 30,
+      LKnee: 25,
+      RKnee: 25
     },
     weights: {
       LShoulder: 1.2,

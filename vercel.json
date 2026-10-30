@@ -1,0 +1,11 @@
+{
+  "buildCommand": "cd Frontend/yoga-project && npm install && npm run build",
+  "outputDirectory": "Frontend/yoga-project/dist",
+  "cleanUrls": true,
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}

@@ -32,6 +32,7 @@ export function useHoldTimer({
   passScoreThresholdRef.current = passScoreThreshold;
 
   const holdElapsedRef = useRef(0);
+  const totalHoldAttemptTimeRef = useRef(0);
   const isCurrentlyInPoseRef = useRef(false);
   const isTabPausedRef = useRef(false);
   const completedOnceRef = useRef(false);
@@ -70,6 +71,7 @@ export function useHoldTimer({
     isTabPausedRef.current = false;
     completedOnceRef.current = false;
     holdElapsedRef.current = 0;
+    totalHoldAttemptTimeRef.current = 0;
     lastTimestampRef.current = null;
     similaritySamplesRef.current = [];
     jointDiffAccRef.current = {};
@@ -91,9 +93,14 @@ export function useHoldTimer({
     phaseRef.current = 'completed';
     setPhase('completed');
 
-    // Calculate score using every frame sampled while in pose
+    // Fraction of total active hold session spent maintaining required pose
+    const inPoseTime = holdElapsedRef.current;
+    const totalTime = Math.max(inPoseTime, totalHoldAttemptTimeRef.current);
+    const poseFraction = totalTime > 0 ? Math.min(1, inPoseTime / totalTime) : 1.0;
+
+    // Calculate score = average similarity × fraction of hold time in pose
     const samples = similaritySamplesRef.current;
-    const { score, isPassed } = computeHoldScore(samples, passScoreThresholdRef.current);
+    const { score, isPassed } = computeHoldScore(samples, passScoreThresholdRef.current, poseFraction);
 
     // Build accumulated per-joint error breakdown
     const accumulatedSimMap = {};
@@ -118,6 +125,8 @@ export function useHoldTimer({
     const summary = {
       score,
       holdElapsed: targetDurationRef.current,
+      totalAttemptSeconds: Math.round(totalTime * 10) / 10,
+      poseFraction: Math.round(poseFraction * 100) / 100,
       simMap: accumulatedSimMap,
       isMirrored: lastIsMirroredRef.current,
       isPassed
@@ -147,14 +156,19 @@ export function useHoldTimer({
       const deltaSeconds = (now - (lastTimestampRef.current || now)) / 1000;
       lastTimestampRef.current = now;
 
-      // Advance hold elapsed time ONLY when user is actively in pose and framed
-      if (isCurrentlyInPoseRef.current && deltaSeconds > 0 && deltaSeconds < 1.0) {
-        holdElapsedRef.current += deltaSeconds;
-        const currentElapsed = Math.min(targetDurationRef.current, holdElapsedRef.current);
-        setHoldElapsed(currentElapsed);
+      if (deltaSeconds > 0 && deltaSeconds < 1.0) {
+        // Track total wall time in holding phase
+        totalHoldAttemptTimeRef.current += deltaSeconds;
 
-        if (currentElapsed >= targetDurationRef.current) {
-          finishRun();
+        // Advance hold elapsed time ONLY when user is actively in pose and framed
+        if (isCurrentlyInPoseRef.current) {
+          holdElapsedRef.current += deltaSeconds;
+          const currentElapsed = Math.min(targetDurationRef.current, holdElapsedRef.current);
+          setHoldElapsed(currentElapsed);
+
+          if (currentElapsed >= targetDurationRef.current) {
+            finishRun();
+          }
         }
       }
     }, 50);

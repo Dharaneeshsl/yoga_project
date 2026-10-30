@@ -73,7 +73,7 @@ const LevelScreen = ({
   const debouncerRef = useRef(new HintDebouncer(650, 2200));
   const hasAnnouncedHoldRef = useRef(false);
   const hasAnnouncedCompleteRef = useRef(false);
-  const lastSpokenJointRef = useRef(null);
+  const lastSpokenInstructionRef = useRef(null);
 
   const [activeHint, setActiveHint] = useState(null);
   const [activeTab, setActiveTab] = useState('checklist'); // 'checklist' | 'guide' | 'benefits'
@@ -97,10 +97,10 @@ const LevelScreen = ({
     }
   }, [isCameraActive, isCameraLoading, cameraError, startCamera]);
 
-  // Level-aware body framing check (relaxes feet requirement for floor poses like Cobra and Downward Dog)
+  // Level-aware body framing check (relaxed threshold for floor poses like Cobra and Downward Dog)
   const bodyCheck = useMemo(() => {
     const isFloor = Boolean(levelData.isFloorPose);
-    const minParts = isFloor ? 5 : (levelData.viewOrientation === 'front' ? 7 : 6);
+    const minParts = isFloor ? 4 : (levelData.viewOrientation === 'front' ? 7 : 6);
     return checkFullBodyInFrame(landmarks, 0.45, {
       requireFeet: !isFloor,
       minRequiredParts: minParts
@@ -119,36 +119,48 @@ const LevelScreen = ({
     updatePoseStatus
   } = holdTimer;
 
+  // Fast access refs for the native 60fps frame pipeline
+  const levelDataRef = useRef(levelData);
+  levelDataRef.current = levelData;
+
+  const diffMultiplier = (diffConfig && diffConfig.multiplier) || settings.difficultyMultiplier || 1.0;
+  const diffMultiplierRef = useRef(diffMultiplier);
+  diffMultiplierRef.current = diffMultiplier;
+
+  const phaseRef = useRef(phase);
+  phaseRef.current = phase;
+
+  const updatePoseStatusRef = useRef(updatePoseStatus);
+  updatePoseStatusRef.current = updatePoseStatus;
+
   // Reset hint debouncer and announcement guards when level changes
   useEffect(() => {
     debouncerRef.current.clear();
     hasAnnouncedHoldRef.current = false;
     hasAnnouncedCompleteRef.current = false;
-    lastSpokenJointRef.current = null;
+    lastSpokenInstructionRef.current = null;
     setActiveHint(null);
   }, [levelData.id]);
 
-  // Compute live similarity against target pose
+  // Compute live similarity against target pose for UI state
   const simResult = useMemo(() => {
-    const diffMultiplier = (diffConfig && diffConfig.multiplier) || settings.difficultyMultiplier || 1.0;
     return computePoseSimilarity(
       detectedAngles,
       levelData,
       diffMultiplier
     );
-  }, [detectedAngles, levelData, diffConfig, settings.difficultyMultiplier]);
+  }, [detectedAngles, levelData, diffMultiplier]);
 
   const liveSimilarityPct = Math.round(simResult.overall * 100);
 
-  // Update hold timer each time pose similarity or frame check updates
+  // Sync hold status for state changes (e.g. initial render)
   useEffect(() => {
     if (phase === 'holding') {
       updatePoseStatus(simResult.overall, bodyCheck.isReady, simResult.map, simResult.isMirrored);
     }
   }, [simResult.overall, simResult.map, simResult.isMirrored, bodyCheck.isReady, phase, updatePoseStatus]);
 
-  // Handle corrective hints debouncing (throttled at ~5 Hz)
-  // Speaks each hint once, and only speaks again when the joint changes
+  // Handle corrective hints debouncing: speaks once per unique instruction, does not repeat
   useEffect(() => {
     if (phase === 'holding') {
       const topHint = getTopCorrectionHint(simResult.map);
@@ -156,18 +168,14 @@ const LevelScreen = ({
       setActiveHint(debounced);
 
       if (debounced && settings.voiceEnabled) {
-        const jointKey = debounced.jointKey || debounced.joint;
-        if (lastSpokenJointRef.current !== jointKey) {
-          lastSpokenJointRef.current = jointKey;
+        if (lastSpokenInstructionRef.current !== debounced.instruction) {
+          lastSpokenInstructionRef.current = debounced.instruction;
           voice.speak(debounced.instruction);
         }
-      } else if (!debounced) {
-        lastSpokenJointRef.current = null;
       }
     } else {
       debouncerRef.current.clear();
       setActiveHint(null);
-      lastSpokenJointRef.current = null;
     }
   }, [simResult.map, phase, settings.voiceEnabled, voice]);
 
@@ -203,26 +211,44 @@ const LevelScreen = ({
     }
   }, [phase, countdownRemaining, voice, settings.voiceEnabled]);
 
-  // High-FPS Direct Canvas Drawing: subscribes directly to PoseLandmarker frame pipeline
+  // High-FPS Direct Canvas Drawing & Real-Time Pose Status (Subscribes directly to PoseLandmarker frame pipeline)
   useEffect(() => {
-    setOnFrameCallback(({ landmarks, videoWidth, videoHeight }) => {
+    setOnFrameCallback(({ landmarks, angles, videoWidth, videoHeight }) => {
+      // 1. Direct 60fps canvas skeleton rendering
       const canvas = canvasRef.current;
-      if (!canvas) return;
+      if (canvas) {
+        if (canvas.width !== videoWidth || canvas.height !== videoHeight) {
+          canvas.width = videoWidth;
+          canvas.height = videoHeight;
+        }
 
-      if (canvas.width !== videoWidth || canvas.height !== videoHeight) {
-        canvas.width = videoWidth;
-        canvas.height = videoHeight;
+        const ctx = canvas.getContext('2d');
+        drawPoseSkeleton(
+          ctx,
+          landmarks,
+          simResult.map,
+          videoWidth,
+          videoHeight,
+          settings.mirrorView !== false
+        );
       }
 
-      const ctx = canvas.getContext('2d');
-      drawPoseSkeleton(
-        ctx,
-        landmarks,
-        simResult.map,
-        videoWidth,
-        videoHeight,
-        settings.mirrorView !== false
-      );
+      // 2. High-frequency pose status update on every camera frame (removes 200ms throttle lag from hold timer)
+      if (phaseRef.current === 'holding' && angles && Object.keys(angles).length > 0) {
+        const frameSim = computePoseSimilarity(
+          angles,
+          levelDataRef.current,
+          diffMultiplierRef.current
+        );
+        const isFloor = Boolean(levelDataRef.current.isFloorPose);
+        const minParts = isFloor ? 4 : (levelDataRef.current.viewOrientation === 'front' ? 7 : 6);
+        const frameCheck = checkFullBodyInFrame(landmarks, 0.45, {
+          requireFeet: !isFloor,
+          minRequiredParts: minParts
+        });
+
+        updatePoseStatusRef.current(frameSim.overall, frameCheck.isReady, frameSim.map, frameSim.isMirrored);
+      }
     });
 
     return () => {

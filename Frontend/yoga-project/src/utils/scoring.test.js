@@ -25,6 +25,31 @@ describe('Scoring Logic: Score Accumulation & Pass Threshold', () => {
     assert.equal(isPassed, false);
   });
 
+  it('factors hold continuity (poseFraction) so losing pose lowers score and triggers failure', () => {
+    const samples = [0.80, 0.80, 0.80]; // 80% avg similarity
+
+    // 100% hold continuity: score = 80%, passes
+    const perfectHold = computeHoldScore(samples, 60, 1.0);
+    assert.equal(perfectHold.score, 80);
+    assert.equal(perfectHold.isPassed, true);
+
+    // 50% hold continuity (user took twice as long due to losing pose): score = 40%, fails!
+    const brokenHold = computeHoldScore(samples, 60, 0.5);
+    assert.equal(brokenHold.score, 40);
+    assert.equal(brokenHold.isPassed, false);
+    assert.equal(brokenHold.poseFraction, 0.5);
+
+    // 85% hold continuity: score = 68%, passes at standard 60%
+    const slightWobble = computeHoldScore(samples, 60, 0.85);
+    assert.equal(slightWobble.score, 68);
+    assert.equal(slightWobble.isPassed, true);
+
+    // Strict mode (70% pass threshold): 68% fails!
+    const strictFail = computeHoldScore(samples, 70, 0.85);
+    assert.equal(strictFail.score, 68);
+    assert.equal(strictFail.isPassed, false);
+  });
+
   it('evaluates pass/fail across gentle (50%), standard (60%), and strict (70%) difficulty tiers', () => {
     const borderSamples = [0.55, 0.55, 0.55]; // 55%
 

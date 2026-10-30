@@ -36,18 +36,22 @@ export function parseSavedScores(storedValue) {
 }
 
 /**
- * Computes hold score and pass status across all sampled frames.
- * Samples every frame during the active hold, reflecting true performance.
+ * Computes hold score and pass status.
+ * score = Math.round(average similarity * 100 * poseFraction)
+ * Evaluates both alignment accuracy and hold continuity.
  * Guarantees score is an integer bounded strictly between 0 and 100.
  */
-export function computeHoldScore(samples = [], passScoreThreshold = 60) {
+export function computeHoldScore(samples = [], passScoreThreshold = 60, poseFraction = 1.0) {
   if (!samples || samples.length === 0) {
-    return { score: 0, isPassed: false };
+    return { score: 0, isPassed: false, poseFraction: 0, avgSimilarity: 0 };
   }
+  const validFraction = typeof poseFraction === 'number' && !isNaN(poseFraction)
+    ? Math.max(0, Math.min(1, poseFraction))
+    : 1.0;
   const avgSimilarity = samples.reduce((acc, val) => acc + val, 0) / samples.length;
-  const score = Math.max(0, Math.min(100, Math.round(avgSimilarity * 100)));
+  const score = Math.max(0, Math.min(100, Math.round(avgSimilarity * 100 * validFraction)));
   const isPassed = score >= passScoreThreshold;
-  return { score, isPassed };
+  return { score, isPassed, poseFraction: validFraction, avgSimilarity };
 }
 
 /**
