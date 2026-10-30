@@ -160,7 +160,7 @@ const LevelScreen = ({
     }
   }, [simResult.overall, simResult.map, simResult.isMirrored, bodyCheck.isReady, phase, updatePoseStatus]);
 
-  // Handle corrective hints debouncing: speaks once per unique instruction, does not repeat
+  // Handle corrective hints debouncing: speaks once per unique instruction, does not repeat while error persists
   useEffect(() => {
     if (phase === 'holding') {
       const topHint = getTopCorrectionHint(simResult.map);
@@ -172,10 +172,14 @@ const LevelScreen = ({
           lastSpokenInstructionRef.current = debounced.instruction;
           voice.speak(debounced.instruction);
         }
+      } else if (!debounced) {
+        // Reset when posture error is resolved so re-emerging errors can be warned again
+        lastSpokenInstructionRef.current = null;
       }
     } else {
       debouncerRef.current.clear();
       setActiveHint(null);
+      lastSpokenInstructionRef.current = null;
     }
   }, [simResult.map, phase, settings.voiceEnabled, voice]);
 
